@@ -158,8 +158,8 @@
     border-radius: 50%;
   }
   aside {
-    width: 320px;
-    min-width: 270px;
+    width: 340px;
+    min-width: 290px;
     background: var(--panel);
     border-left: 1px solid var(--panel-border);
     padding: 16px;
@@ -203,6 +203,14 @@
   .pair-row .pair-detail { color: var(--muted); font-size: 12px; }
   .pair-row.good .pair-status { color: var(--good); font-weight: 700; }
   .pair-row.bad .pair-status { color: var(--bad); font-weight: 700; }
+  .compass-wrap {
+    margin-top: 8px;
+    background: #000;
+    border-radius: 4px;
+    border: 1px solid var(--panel-border);
+    overflow: hidden;
+    line-height: 0;
+  }
   .hint {
     font-size: 12px;
     color: var(--muted);
@@ -283,7 +291,8 @@
           2. Кнопками «Орудие» / «Цель» выберите, что ставите, и кликайте по карте.<br><br>
           3. Клик по уже поставленной точке своего типа — удаляет её. Клик по пустому месту, когда лимит для режима исчерпан, — заменяет последнюю такую точку.<br><br>
           4. Колесо мыши — приближение к точке под курсором, как в Photoshop.<br><br>
-          5. Дальность стрельбы: 330–1100 м. Линии и кольца зелёные — в зоне поражения, красные — вне.
+          5. Дальность стрельбы: 330–1100 м. Линии и кольца зелёные — в зоне поражения, красные — вне.<br><br>
+          6. Под каждым результатом — полоса компаса, как в игре: риски по градусам, подписи каждые 45°. Красная метка в центре — направление на цель. Поверните персонажа в игре так, чтобы игровой компас показывал то же самое (ту же букву и то же смещение от неё в рисках), что и здесь.
         </div>
       </div>
     </aside>
@@ -295,6 +304,7 @@
   var MIN_RANGE = 330, MAX_RANGE = 1100;
   var MIN_SCALE = 0.1, MAX_SCALE = 6;
   var MARKER_HIT_PX = 14;
+  var COMPASS_LABELS = ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ'];
 
   var img = document.getElementById('map-img');
   var wrap = document.getElementById('map-wrap');
@@ -439,9 +449,8 @@
   }
 
   function compassLabel(deg) {
-    var labels = ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ'];
     var idx = Math.round(deg / 45) % 8;
-    return labels[idx];
+    return COMPASS_LABELS[idx];
   }
 
   function computeDistAz(gun, target) {
@@ -450,6 +459,37 @@
     var dist = Math.hypot(dx, dy);
     var angle = (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360;
     return { dist: dist, angle: angle };
+  }
+
+  // Renders a compass tape strip like the in-game HUD: one tick per degree,
+  // a taller labeled tick every 45 degrees (45 ticks between labels), and a
+  // fixed red marker at the exact center showing the target bearing.
+  function buildCompassTapeSvg(az) {
+    var W = 300, H = 50;
+    var DEG_WINDOW = 130;
+    var pxPerDeg = W / DEG_WINDOW;
+    var startDeg = Math.floor(az - DEG_WINDOW / 2) - 1;
+    var endDeg = Math.ceil(az + DEG_WINDOW / 2) + 1;
+    var parts = [];
+    parts.push('<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" preserveAspectRatio="none">');
+    for (var d = startDeg; d <= endDeg; d++) {
+      var norm = ((d % 360) + 360) % 360;
+      var x = W / 2 + (d - az) * pxPerDeg;
+      if (x < -6 || x > W + 6) continue;
+      var isMajor = (norm % 45 === 0);
+      var tickH = isMajor ? 16 : 7;
+      var y2 = H - 8;
+      var y1 = y2 - tickH;
+      parts.push('<line x1="' + x.toFixed(1) + '" y1="' + y1 + '" x2="' + x.toFixed(1) + '" y2="' + y2 + '" stroke="' + (isMajor ? '#d8c46a' : '#6f7a5c') + '" stroke-width="' + (isMajor ? 1.6 : 1) + '"/>');
+      if (isMajor) {
+        var label = COMPASS_LABELS[norm / 45];
+        parts.push('<text x="' + x.toFixed(1) + '" y="' + (y1 - 4) + '" text-anchor="middle" fill="#d8c46a" font-size="11" font-weight="700" font-family="Arial, sans-serif">' + label + '</text>');
+      }
+    }
+    parts.push('<line x1="' + (W / 2) + '" y1="2" x2="' + (W / 2) + '" y2="' + (H - 2) + '" stroke="#ff4d4d" stroke-width="1.5" stroke-dasharray="3,2"/>');
+    parts.push('<polygon points="' + (W / 2 - 6) + ',' + (H - 6) + ' ' + (W / 2 + 6) + ',' + (H - 6) + ' ' + (W / 2) + ',' + (H - 17) + '" fill="#ff4d4d"/>');
+    parts.push('</svg>');
+    return parts.join('');
   }
 
   function getPairs() {
@@ -554,6 +594,7 @@
         '<div class="pair-title">О' + (p.gunIdx + 1) + ' → Ц' + (p.targetIdx + 1) + ': ' + Math.round(res.dist) + ' м</div>' +
         '<div class="pair-detail">Азимут ' + res.angle.toFixed(1) + '° (' + compassLabel(res.angle) + ')</div>' +
         '<div class="pair-status">' + statusText + '</div>' +
+        '<div class="compass-wrap">' + buildCompassTapeSvg(res.angle) + '</div>' +
         '</div>';
     });
     pairsList.innerHTML = html;
