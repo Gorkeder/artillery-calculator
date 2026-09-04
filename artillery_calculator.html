@@ -466,7 +466,7 @@
   // fixed red marker at the exact center showing the target bearing.
   function buildCompassTapeSvg(az) {
     var W = 300, H = 50;
-    var DEG_WINDOW = 130;
+    var DEG_WINDOW = 60;
     var pxPerDeg = W / DEG_WINDOW;
     var startDeg = Math.floor(az - DEG_WINDOW / 2) - 1;
     var endDeg = Math.ceil(az + DEG_WINDOW / 2) + 1;
@@ -477,10 +477,13 @@
       var x = W / 2 + (d - az) * pxPerDeg;
       if (x < -6 || x > W + 6) continue;
       var isMajor = (norm % 45 === 0);
-      var tickH = isMajor ? 16 : 7;
+      var isMedium = !isMajor && (norm % 15 === 0);
+      var tickH = isMajor ? 18 : (isMedium ? 12 : 7);
       var y2 = H - 8;
       var y1 = y2 - tickH;
-      parts.push('<line x1="' + x.toFixed(1) + '" y1="' + y1 + '" x2="' + x.toFixed(1) + '" y2="' + y2 + '" stroke="' + (isMajor ? '#d8c46a' : '#6f7a5c') + '" stroke-width="' + (isMajor ? 1.6 : 1) + '"/>');
+      var tickColor = isMajor ? '#d8c46a' : (isMedium ? '#b9ae7a' : '#6f7a5c');
+      var tickWidth = isMajor ? 1.8 : (isMedium ? 1.3 : 1);
+      parts.push('<line x1="' + x.toFixed(1) + '" y1="' + y1 + '" x2="' + x.toFixed(1) + '" y2="' + y2 + '" stroke="' + tickColor + '" stroke-width="' + tickWidth + '"/>');
       if (isMajor) {
         var label = COMPASS_LABELS[norm / 45];
         parts.push('<text x="' + x.toFixed(1) + '" y="' + (y1 - 4) + '" text-anchor="middle" fill="#d8c46a" font-size="11" font-weight="700" font-family="Arial, sans-serif">' + label + '</text>');
