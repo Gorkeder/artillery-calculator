@@ -288,12 +288,63 @@
     letter-spacing: 1px;
   }
   body.gated #app { display: none !important; }
+  #gate-key-form {
+    margin-top: 24px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 460px;
+  }
+  #gate-key-input {
+    padding: 9px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--panel-border, #3a3f2c);
+    background: #1c1f17;
+    color: var(--text, #e9e6d8);
+    font-size: 13px;
+    width: 300px;
+    max-width: 70vw;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.5px;
+  }
+  #gate-key-btn {
+    padding: 9px 18px;
+    border-radius: 6px;
+    border: 1px solid var(--accent, #d8c46a);
+    background: #33301a;
+    color: var(--text, #e9e6d8);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  #gate-key-btn:disabled { opacity: 0.55; cursor: default; }
+  #gate-key-hint {
+    flex-basis: 100%;
+    font-size: 11px;
+    color: var(--muted, #9a9a86);
+    margin-top: 4px;
+  }
+  #gate-key-msg {
+    flex-basis: 100%;
+    font-size: 12px;
+    margin-top: 6px;
+    min-height: 16px;
+  }
+  #gate-key-msg.err { color: var(--bad, #e05252); }
+  #gate-key-msg.ok { color: var(--good, #4caf50); }
 </style>
 <div id="release-gate">
   <h1>Калькулятор артиллерии</h1>
   <p class="gate-sub" id="gate-sub">Карта ещё не вышла. Инструмент откроется, когда обновление появится в игре.</p>
   <div class="gate-timer" id="gate-timer">--:--:--</div>
   <div class="gate-when">Открытие: 6 сентября, 16:00 МСК</div>
+  <form id="gate-key-form" autocomplete="off">
+    <input id="gate-key-input" type="password" inputmode="latin" spellcheck="false"
+           autocapitalize="off" placeholder="Ключ раннего доступа" aria-label="Ключ раннего доступа">
+    <button type="submit" id="gate-key-btn">Войти</button>
+    <div id="gate-key-hint">Есть ключ раннего доступа? Введите его, чтобы открыть калькулятор до релиза.</div>
+    <div id="gate-key-msg" role="status"></div>
+  </form>
 </div>
 <script>
 (function () {
@@ -357,6 +408,110 @@
     if (Date.now() - pastSince > 8000) {
       subEl.textContent = 'Публикуем карту, подождите минуту и обновите страницу…';
     }
+  }
+
+  // --- Ранний доступ по ключу ---------------------------------------------
+  // map.enc уже лежит в репозитории (base64( iv(12) || authTag(16) || ct ),
+  // AES-256-GCM). Ключ раннего доступа — те же 64 hex-символа, что и MAP_KEY.
+  // Верный ключ расшифровывает карту прямо в браузере через WebCrypto и
+  // открывает калькулятор, не дожидаясь отсчёта. Неверный ключ не проходит
+  // проверку GCM — значит проверка ключа = проверка расшифровки, отдельного
+  // «пароля» хранить не нужно.
+  var keyForm = document.getElementById('gate-key-form');
+  var keyInput = document.getElementById('gate-key-input');
+  var keyBtn = document.getElementById('gate-key-btn');
+  var keyMsg = document.getElementById('gate-key-msg');
+  var earlyBusy = false;
+
+  function setKeyMsg(text, kind) {
+    if (!keyMsg) return;
+    keyMsg.textContent = text || '';
+    keyMsg.className = kind || '';
+  }
+
+  function hexToBytes(hex) {
+    var out = new Uint8Array(hex.length / 2);
+    for (var i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return out;
+  }
+
+  function b64ToBytes(b64) {
+    var bin = atob(b64);
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  function earlyUnlock() {
+    if (doneUnlock || !hasMap()) return;
+    doneUnlock = true;
+    if (iv) clearInterval(iv);
+    if (reqTimer) clearTimeout(reqTimer);
+    var img = document.getElementById('map-img');
+    if (img) img.src = window.__ARTY_MAP__;
+    document.body.classList.remove('gated');
+    if (gate && gate.parentNode) gate.parentNode.removeChild(gate);
+    if (styleEl && styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
+  }
+
+  function tryEarlyAccess(rawKey) {
+    var keyHex = (rawKey || '').trim().replace(/\s+/g, '').toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(keyHex)) {
+      setKeyMsg('Ключ должен состоять ровно из 64 hex-символов.', 'err');
+      return;
+    }
+    if (!window.crypto || !crypto.subtle) {
+      setKeyMsg('Расшифровка в этом браузере недоступна (нужен https).', 'err');
+      return;
+    }
+    earlyBusy = true;
+    if (keyBtn) keyBtn.disabled = true;
+    if (keyInput) keyInput.disabled = true;
+    setKeyMsg('Проверяю ключ и расшифровываю карту…', '');
+
+    fetch('map.enc', { cache: 'no-store' })
+      .then(function (resp) {
+        if (!resp.ok) throw new Error('map.enc HTTP ' + resp.status);
+        return resp.text();
+      })
+      .then(function (text) {
+        var blob = b64ToBytes(text.trim());
+        var ivBytes = blob.subarray(0, 12);
+        var tag = blob.subarray(12, 28);
+        var ct = blob.subarray(28);
+        var data = new Uint8Array(ct.length + tag.length);
+        data.set(ct, 0);
+        data.set(tag, ct.length); // WebCrypto ждёт ciphertext || tag
+        return crypto.subtle.importKey('raw', hexToBytes(keyHex), 'AES-GCM', false, ['decrypt'])
+          .then(function (cryptoKey) {
+            return crypto.subtle.decrypt(
+              { name: 'AES-GCM', iv: ivBytes, tagLength: 128 }, cryptoKey, data
+            );
+          });
+      })
+      .then(function (plainBuf) {
+        var script = new TextDecoder().decode(plainBuf);
+        // map.js — одна строка: window.__ARTY_MAP__ = "data:image/...;base64,...";
+        var m = script.match(/"(data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+)"/);
+        if (!m) throw new Error('расшифровано, но карта не распознана');
+        window.__ARTY_MAP__ = m[1];
+        setKeyMsg('Ключ принят, открываю калькулятор…', 'ok');
+        earlyUnlock();
+      })
+      .catch(function () {
+        earlyBusy = false;
+        if (keyBtn) keyBtn.disabled = false;
+        if (keyInput) keyInput.disabled = false;
+        setKeyMsg('Неверный ключ или карта недоступна. Проверьте ключ и попробуйте снова.', 'err');
+      });
+  }
+
+  if (keyForm) {
+    keyForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (earlyBusy || doneUnlock) return;
+      tryEarlyAccess(keyInput ? keyInput.value : '');
+    });
   }
 
   document.body.classList.add('gated');
