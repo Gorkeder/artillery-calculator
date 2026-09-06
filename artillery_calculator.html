@@ -596,7 +596,7 @@
       <button id="zoom-out">−</button>
       <span id="zoom-label">100%</span>
       <button id="zoom-in">+</button>
-      <span style="margin-left:6px;">Колесо мыши — зум к курсору</span>
+      <span style="margin-left:6px;">Колесо — зум к центру · правая кнопка — двигать карту</span>
     </div>
   </header>
   <main>
@@ -818,12 +818,12 @@
 
   wrap.addEventListener('wheel', function (e) {
     e.preventDefault();
-    var rect = wrap.getBoundingClientRect();
-    var wrapX = e.clientX - rect.left;
-    var wrapY = e.clientY - rect.top;
     var factor = Math.exp(-e.deltaY * 0.0018);
-    zoomTo(scale * factor, { wrapX: wrapX, wrapY: wrapY });
+    zoomTo(scale * factor, centerAnchor());
   }, { passive: false });
+
+  // Убираем контекстное меню на карте — правая кнопка занята панорамированием.
+  wrap.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
   function fitInitialScale() {
     var availW = wrap.clientWidth - 4;
@@ -886,6 +886,18 @@
   }
 
   img.addEventListener('mousedown', function (e) {
+    // Правая кнопка (или средняя) — панорамирование карты как в Photoshop,
+    // независимо от того, попали ли мы в маркер.
+    if (e.button === 2 || e.button === 1) {
+      interaction = {
+        type: 'map',
+        startClient: { x: e.clientX, y: e.clientY },
+        startScroll: { x: wrap.scrollLeft, y: wrap.scrollTop },
+        moved: false
+      };
+      e.preventDefault();
+      return;
+    }
     if (e.button !== 0) return;
     var hit = hitMarker(e);
     if (hit) {
