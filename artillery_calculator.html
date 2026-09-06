@@ -233,6 +233,64 @@
     cursor: pointer;
     font-size: 15px;
   }
+  .share-btn {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--panel-border);
+    background: #23271b;
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .share-btn:hover { border-color: var(--accent); }
+  .coord-input {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .coord-input input {
+    width: 66px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--panel-border);
+    background: #1c1f17;
+    color: var(--text);
+    font-size: 13px;
+  }
+  .coord-input button {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--panel-border);
+    background: #23271b;
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .coord-input button:hover { border-color: var(--accent); }
+  #coord-msg {
+    flex-basis: 100%;
+    font-size: 11px;
+    min-height: 14px;
+    color: var(--muted);
+  }
+  #coord-msg.err { color: var(--bad); }
+  #cursor-coord {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    z-index: 5;
+    background: rgba(18, 20, 15, 0.85);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    pointer-events: none;
+  }
+  #cursor-coord[hidden] { display: none; }
   @media (max-width: 900px) {
     main { flex-direction: column; }
     aside {
@@ -532,6 +590,7 @@
       <button class="mode-btn active" id="mode-gun" data-mode="gun"><span class="dot gun"></span>Орудие</button>
       <button class="mode-btn" id="mode-target" data-mode="target"><span class="dot target"></span>Цель</button>
       <button class="reset-btn" id="reset-btn">Очистить всё</button>
+      <button class="share-btn" id="share-btn" title="Скопировать ссылку на эту расстановку">Скопировать ссылку</button>
     </div>
     <div class="zoom-controls">
       <button id="zoom-out">−</button>
@@ -547,10 +606,17 @@
         <svg id="lines-svg"></svg>
         <div id="markers-layer"></div>
       </div>
+      <div id="cursor-coord" hidden></div>
     </div>
     <aside>
       <div class="card">
         <h2>Точки</h2>
+        <div class="coord-input">
+          <input id="coord-x" type="number" min="0" max="1152" step="1" placeholder="X" aria-label="Координата X">
+          <input id="coord-y" type="number" min="0" max="1152" step="1" placeholder="Y" aria-label="Координата Y">
+          <button id="coord-add" type="button">Поставить</button>
+          <div id="coord-msg"></div>
+        </div>
         <div id="coords-list"><div class="empty-hint">Точек ещё нет</div></div>
       </div>
       <div class="card">
@@ -563,9 +629,11 @@
           1. Выберите режим сверху: простой (1 на 1), несколько орудий на одну цель, одно орудие на несколько целей, или каждое орудие на свою цель по порядку простановки.<br><br>
           2. Кнопками «Орудие» / «Цель» выберите, что ставите, и кликайте по карте.<br><br>
           3. Клик по уже поставленной точке своего типа — удаляет её. Клик по пустому месту, когда лимит для режима исчерпан, — заменяет последнюю такую точку.<br><br>
-          4. Колесо мыши — приближение к точке под курсором, как в Photoshop.<br><br>
-          5. Дальность стрельбы: 330–1100 м. Линии и кольца зелёные — в зоне поражения, красные — вне.<br><br>
-          6. Под каждым результатом — полоса компаса, как в игре: риски по градусам, подписи каждые 45°. Красная метка в центре — направление на цель. Поверните персонажа в игре так, чтобы игровой компас показывал то же самое (ту же букву и то же смещение от неё в рисках), что и здесь.
+          4. Точку можно перетаскивать за маркер. Пустое место карты можно тянуть, чтобы прокрутить её. Или задать координаты вручную полями X / Y над списком точек.<br><br>
+          5. Колесо мыши — приближение к точке под курсором, как в Photoshop.<br><br>
+          6. Дальность стрельбы: 330–1100 м. Линии и кольца зелёные — в зоне поражения, красные — вне.<br><br>
+          7. Под каждым результатом — полоса компаса, как в игре: риски по градусам, подписи каждые 45°. Красная метка в центре — направление на цель. Поверните персонажа в игре так, чтобы игровой компас показывал то же самое (ту же букву и то же смещение от неё в рисках), что и здесь.<br><br>
+          8. Горячие клавиши: G — ставить орудие, T — цель, R — очистить всё, «+» / «−» — зум, Ctrl+Z — отменить. Расстановка сохраняется при перезагрузке; «Скопировать ссылку» даёт ссылку с той же расстановкой для напарника.
         </div>
       </div>
     </aside>
@@ -586,12 +654,111 @@
   var linesSvg = document.getElementById('lines-svg');
   var coordsList = document.getElementById('coords-list');
   var pairsList = document.getElementById('pairs-list');
+  var cursorCoord = document.getElementById('cursor-coord');
 
   var placing = 'gun';
   var pairingMode = 'simple';
   var guns = [];
   var targets = [];
   var scale = 1;
+
+  var VALID_MODES = ['simple', 'many-to-one', 'one-to-many', 'one-to-one'];
+  var LS_KEY = 'arty-calc-state';
+  var UNDO_MAX = 30;
+  var undoStack = [];
+  var persistReady = false;
+  var persistTimer = null;
+
+  // --- Сериализация состояния (для ссылки и localStorage) -----------------
+  // Формат: m=<режим>&g=<x.y_x.y...>&t=<...>  (координаты — целые метры).
+  function serializeState() {
+    function enc(arr) {
+      return arr.map(function (p) {
+        return Math.round(p.x) + '.' + Math.round(p.y);
+      }).join('_');
+    }
+    var parts = ['m=' + pairingMode];
+    if (guns.length) parts.push('g=' + enc(guns));
+    if (targets.length) parts.push('t=' + enc(targets));
+    return parts.join('&');
+  }
+
+  function parseState(str) {
+    if (!str) return null;
+    str = String(str).replace(/^#/, '');
+    if (!str) return null;
+    var out = { mode: null, guns: [], targets: [] };
+    var seen = false;
+    str.split('&').forEach(function (kv) {
+      var i = kv.indexOf('=');
+      if (i < 0) return;
+      var k = kv.slice(0, i), v = kv.slice(i + 1);
+      if (k === 'm') {
+        if (VALID_MODES.indexOf(v) >= 0) { out.mode = v; seen = true; }
+      } else if (k === 'g' || k === 't') {
+        var pts = [];
+        v.split('_').forEach(function (pair) {
+          var mm = pair.split('.');
+          if (mm.length !== 2) return;
+          var x = parseFloat(mm[0]), y = parseFloat(mm[1]);
+          if (!isFinite(x) || !isFinite(y)) return;
+          pts.push({ x: Math.max(0, Math.min(MAP_W, x)), y: Math.max(0, Math.min(MAP_H, y)) });
+        });
+        if (k === 'g') out.guns = pts; else out.targets = pts;
+        seen = true;
+      }
+    });
+    return seen ? out : null;
+  }
+
+  function applyLoadedState(st) {
+    if (!st) return false;
+    if (st.mode) {
+      pairingMode = st.mode;
+      var sel = document.getElementById('pairing-mode');
+      if (sel) sel.value = st.mode;
+    }
+    guns = st.guns.slice(0, capFor('gun', pairingMode));
+    targets = st.targets.slice(0, capFor('target', pairingMode));
+    return true;
+  }
+
+  function persist() {
+    var s = serializeState();
+    var hasPoints = guns.length || targets.length;
+    try {
+      if (hasPoints) localStorage.setItem(LS_KEY, s);
+      else localStorage.removeItem(LS_KEY);
+    } catch (e) {}
+    var desired = hasPoints ? '#' + s : '';
+    if ((location.hash || '') === desired) return;
+    try {
+      history.replaceState(null, '', hasPoints ? desired : location.pathname + location.search);
+    } catch (e) {}
+  }
+
+  function schedulePersist() {
+    if (!persistReady) return;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(persist, 300);
+  }
+
+  // --- Undo -------------------------------------------------------------
+  function pushUndo() {
+    undoStack.push(serializeState());
+    if (undoStack.length > UNDO_MAX) undoStack.shift();
+  }
+
+  function undo() {
+    if (!undoStack.length) return;
+    var st = parseState(undoStack.pop());
+    pairingMode = (st && st.mode) || pairingMode;
+    var sel = document.getElementById('pairing-mode');
+    if (sel) sel.value = pairingMode;
+    guns = st ? st.guns.slice(0, capFor('gun', pairingMode)) : [];
+    targets = st ? st.targets.slice(0, capFor('target', pairingMode)) : [];
+    redraw();
+  }
 
   function capFor(kind, mode) {
     if (mode === 'simple') return 1;
@@ -601,9 +768,11 @@
   }
 
   document.getElementById('pairing-mode').addEventListener('change', function (e) {
+    pushUndo();
     pairingMode = e.target.value;
-    guns = [];
-    targets = [];
+    // Не стираем точки — обрезаем до лимита нового режима (лишние с конца).
+    guns = guns.slice(0, capFor('gun', pairingMode));
+    targets = targets.slice(0, capFor('target', pairingMode));
     redraw();
   });
 
@@ -636,11 +805,15 @@
     }
   }
 
+  function centerAnchor() {
+    return { wrapX: wrap.clientWidth / 2, wrapY: wrap.clientHeight / 2 };
+  }
+
   document.getElementById('zoom-in').addEventListener('click', function () {
-    zoomTo(scale + 0.25, { wrapX: wrap.clientWidth / 2, wrapY: wrap.clientHeight / 2 });
+    zoomTo(scale + 0.25, centerAnchor());
   });
   document.getElementById('zoom-out').addEventListener('click', function () {
-    zoomTo(scale - 0.25, { wrapX: wrap.clientWidth / 2, wrapY: wrap.clientHeight / 2 });
+    zoomTo(scale - 0.25, centerAnchor());
   });
 
   wrap.addEventListener('wheel', function (e) {
@@ -660,62 +833,139 @@
     applyScale();
   }
 
-  document.querySelectorAll('.mode-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      placing = btn.getAttribute('data-mode');
-      document.querySelectorAll('.mode-btn').forEach(function (b) { b.classList.remove('active'); });
-      btn.classList.add('active');
+  function setPlacing(kind) {
+    placing = kind;
+    document.querySelectorAll('.mode-btn').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-mode') === kind);
     });
+  }
+
+  document.querySelectorAll('.mode-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { setPlacing(btn.getAttribute('data-mode')); });
   });
 
-  document.getElementById('reset-btn').addEventListener('click', function () {
+  function doReset() {
+    if (!guns.length && !targets.length) return;
+    pushUndo();
     guns = [];
     targets = [];
     redraw();
-  });
+  }
+  document.getElementById('reset-btn').addEventListener('click', doReset);
 
-  var dragStart = null;
-  img.addEventListener('mousedown', function (e) {
-    dragStart = { x: e.clientX, y: e.clientY };
-  });
+  // --- Взаимодействие с картой: клик (поставить/удалить), перетаскивание
+  // маркера, панорамирование карты. Всё через хит-тест по координатам, т.к.
+  // слой маркеров не принимает события (pointer-events: none).
+  var MOVE_THRESHOLD = 4;
+  var interaction = null;
 
-  img.addEventListener('click', function (e) {
-    if (dragStart && (Math.abs(e.clientX - dragStart.x) > 4 || Math.abs(e.clientY - dragStart.y) > 4)) {
-      dragStart = null;
-      return;
-    }
-    dragStart = null;
-
+  function mapCoordFromEvent(e) {
     var rect = img.getBoundingClientRect();
-    var arr = placing === 'gun' ? guns : targets;
+    return { x: (e.clientX - rect.left) / scale, y: (e.clientY - rect.top) / scale };
+  }
 
-    var hitIdx = -1;
-    for (var i = 0; i < arr.length; i++) {
-      var mx = rect.left + arr[i].x * scale;
-      var my = rect.top + arr[i].y * scale;
-      if (Math.hypot(e.clientX - mx, e.clientY - my) <= MARKER_HIT_PX) {
-        hitIdx = i;
-        break;
+  function clampPt(p) {
+    return { x: Math.max(0, Math.min(MAP_W, p.x)), y: Math.max(0, Math.min(MAP_H, p.y)) };
+  }
+
+  function hitMarker(e, kindFilter) {
+    var rect = img.getBoundingClientRect();
+    var lists = [{ arr: guns, kind: 'gun' }, { arr: targets, kind: 'target' }];
+    for (var l = 0; l < lists.length; l++) {
+      if (kindFilter && lists[l].kind !== kindFilter) continue;
+      var arr = lists[l].arr;
+      for (var i = 0; i < arr.length; i++) {
+        var mx = rect.left + arr[i].x * scale;
+        var my = rect.top + arr[i].y * scale;
+        if (Math.hypot(e.clientX - mx, e.clientY - my) <= MARKER_HIT_PX) {
+          return { arr: arr, kind: lists[l].kind, idx: i };
+        }
       }
     }
+    return null;
+  }
 
-    if (hitIdx >= 0) {
-      arr.splice(hitIdx, 1);
+  img.addEventListener('mousedown', function (e) {
+    if (e.button !== 0) return;
+    var hit = hitMarker(e);
+    if (hit) {
+      interaction = {
+        type: 'marker', arr: hit.arr, idx: hit.idx,
+        startClient: { x: e.clientX, y: e.clientY },
+        snapshot: serializeState(), moved: false
+      };
+    } else {
+      interaction = {
+        type: 'map',
+        startClient: { x: e.clientX, y: e.clientY },
+        startScroll: { x: wrap.scrollLeft, y: wrap.scrollTop },
+        moved: false
+      };
+    }
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', function (e) {
+    if (!interaction) return;
+    var dx = e.clientX - interaction.startClient.x;
+    var dy = e.clientY - interaction.startClient.y;
+    if (!interaction.moved && Math.hypot(dx, dy) > MOVE_THRESHOLD) interaction.moved = true;
+    if (!interaction.moved) return;
+
+    if (interaction.type === 'marker') {
+      interaction.arr[interaction.idx] = clampPt(mapCoordFromEvent(e));
+      img.style.cursor = 'grabbing';
+      redraw();
+    } else {
+      img.style.cursor = 'grabbing';
+      wrap.scrollLeft = interaction.startScroll.x - dx;
+      wrap.scrollTop = interaction.startScroll.y - dy;
+    }
+  });
+
+  document.addEventListener('mouseup', function (e) {
+    if (!interaction) return;
+    var it = interaction;
+    interaction = null;
+    img.style.cursor = '';
+
+    if (it.moved) {
+      if (it.type === 'marker') {
+        undoStack.push(it.snapshot);
+        if (undoStack.length > UNDO_MAX) undoStack.shift();
+        redraw();
+      }
+      return; // перетаскивание — не трактуем как клик
+    }
+
+    if (e.button !== 0) return;
+
+    var delHit = hitMarker(e, placing);
+    if (delHit) {
+      pushUndo();
+      delHit.arr.splice(delHit.idx, 1);
       redraw();
       return;
     }
 
-    var xPx = Math.max(0, Math.min(MAP_W, (e.clientX - rect.left) / scale));
-    var yPx = Math.max(0, Math.min(MAP_H, (e.clientY - rect.top) / scale));
+    var p = clampPt(mapCoordFromEvent(e));
+    var arr = placing === 'gun' ? guns : targets;
     var cap = capFor(placing, pairingMode);
-
-    if (arr.length < cap) {
-      arr.push({ x: xPx, y: yPx });
-    } else {
-      arr[arr.length - 1] = { x: xPx, y: yPx };
-    }
+    pushUndo();
+    if (arr.length < cap) arr.push(p);
+    else arr[arr.length - 1] = p;
     redraw();
   });
+
+  img.addEventListener('mousemove', function (e) {
+    var rect = img.getBoundingClientRect();
+    var x = Math.round((e.clientX - rect.left) / scale);
+    var y = Math.round((e.clientY - rect.top) / scale);
+    if (x < 0 || x > MAP_W || y < 0 || y > MAP_H) { cursorCoord.hidden = true; return; }
+    cursorCoord.hidden = false;
+    cursorCoord.textContent = x + ', ' + y + ' м';
+  });
+  img.addEventListener('mouseleave', function () { cursorCoord.hidden = true; });
 
   function fmtCoord(pos) {
     return Math.round(pos.x) + ', ' + Math.round(pos.y) + ' м';
@@ -882,7 +1132,73 @@
     buildLines(pairs);
     buildCoordsList();
     buildPairsList(pairs);
+    schedulePersist();
   }
+
+  // --- Ручной ввод координат ------------------------------------------------
+  var coordX = document.getElementById('coord-x');
+  var coordY = document.getElementById('coord-y');
+  var coordMsg = document.getElementById('coord-msg');
+
+  function addByCoord() {
+    var x = parseFloat(coordX.value), y = parseFloat(coordY.value);
+    if (!isFinite(x) || !isFinite(y) || x < 0 || x > MAP_W || y < 0 || y > MAP_H) {
+      coordMsg.textContent = 'X и Y — числа от 0 до ' + MAP_W + '.';
+      coordMsg.className = 'err';
+      return;
+    }
+    coordMsg.textContent = '';
+    coordMsg.className = '';
+    var arr = placing === 'gun' ? guns : targets;
+    var cap = capFor(placing, pairingMode);
+    pushUndo();
+    if (arr.length < cap) arr.push({ x: x, y: y });
+    else arr[arr.length - 1] = { x: x, y: y };
+    redraw();
+  }
+
+  document.getElementById('coord-add').addEventListener('click', addByCoord);
+  [coordX, coordY].forEach(function (el) {
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); addByCoord(); }
+    });
+  });
+
+  // --- Ссылка на расстановку ---------------------------------------------
+  var shareBtn = document.getElementById('share-btn');
+  shareBtn.addEventListener('click', function () {
+    var label = shareBtn.textContent;
+    function flash(text) {
+      shareBtn.textContent = text;
+      setTimeout(function () { shareBtn.textContent = label; }, 1400);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(location.href).then(
+        function () { flash('Скопировано'); },
+        function () { flash('Скопируйте из адресной строки'); }
+      );
+    } else {
+      flash('Скопируйте из адресной строки');
+    }
+  });
+
+  // --- Горячие клавиши (раскладко-независимо, по e.code) -----------------
+  document.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); undo(); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.code === 'KeyG') setPlacing('gun');
+    else if (e.code === 'KeyT') setPlacing('target');
+    else if (e.code === 'KeyR') doReset();
+    else if (e.key === '+' || e.key === '=' || e.code === 'NumpadAdd') zoomTo(scale + 0.25, centerAnchor());
+    else if (e.key === '-' || e.key === '_' || e.code === 'NumpadSubtract') zoomTo(scale - 0.25, centerAnchor());
+  });
+
+  window.addEventListener('hashchange', function () {
+    var st = parseState(location.hash);
+    if (st) { applyLoadedState(st); redraw(); }
+  });
 
   window.addEventListener('resize', function () {
     fitInitialScale();
@@ -891,7 +1207,15 @@
   img.addEventListener('load', fitInitialScale);
   if (img.complete) fitInitialScale();
 
+  // Восстановление: приоритет у ссылки (#hash), иначе — localStorage.
+  var restored = parseState(location.hash);
+  if (!restored) {
+    try { restored = parseState(localStorage.getItem(LS_KEY)); } catch (e) {}
+  }
+  applyLoadedState(restored);
+
   redraw();
+  persistReady = true;
 })();
 </script>
 </body>
