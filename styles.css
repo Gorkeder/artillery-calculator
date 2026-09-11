@@ -1,0 +1,386 @@
+@charset "utf-8";
+
+@font-face {
+  font-family: "Bebas Neue";
+  src: url("/bebas-neue.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+:root {
+  --bg: #121212;
+  --panel: #1b1b18;
+  --panel-2: #1f1f1c;
+  --border: #33322a;
+  --text: #e9e6d8;
+  --muted: #9a9a86;
+  --accent: #d4c24f;
+  --accent-dim: #8a7f3e;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 92px;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); }
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 28px;
+  background: rgba(18, 18, 18, 0.92);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--text);
+  font-family: "Bebas Neue", "Arial Narrow", "PT Sans Narrow", sans-serif;
+  font-weight: 400;
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: 0.5px;
+}
+
+.brand img {
+  height: 34px;
+  width: auto;
+  display: block;
+}
+
+.brand .wiki { color: var(--accent); }
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.site-nav a {
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 15px;
+  padding: 9px 15px;
+  border-radius: 6px;
+}
+
+.site-nav a:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+.site-nav a.cta {
+  color: var(--bg);
+  background: var(--accent);
+  font-weight: 600;
+}
+
+.site-nav a.cta:hover {
+  background: #e6d46a;
+  color: var(--bg);
+}
+
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+section {
+  padding: 56px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+section:last-of-type { border-bottom: none; }
+
+h1, h2 {
+  letter-spacing: 0.5px;
+  line-height: 1.2;
+}
+
+.hero {
+  text-align: center;
+  padding-top: 60px;
+}
+
+.hero h1 {
+  font-family: "Bebas Neue", "Arial Narrow", "PT Sans Narrow", sans-serif;
+  font-size: clamp(52px, 11vw, 96px);
+  margin: 0 0 18px;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+  line-height: 0.95;
+}
+
+.hero h1 .wiki { color: var(--accent); }
+
+.lede {
+  max-width: 640px;
+  margin: 0 auto 16px;
+  color: var(--text);
+  font-size: clamp(15px, 2.3vw, 17px);
+}
+
+.lede-sub {
+  max-width: 640px;
+  margin: 0 auto 34px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.lede-sub a {
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.lede-sub a:hover { text-decoration: underline; }
+
+.next-playtest {
+  text-align: left;
+  max-width: 560px;
+  margin: 0 auto 30px;
+  background: var(--panel);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+
+.np-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--accent-dim);
+  margin-bottom: 6px;
+}
+
+.np-title {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.np-when {
+  color: var(--text);
+  margin-top: 2px;
+}
+
+.np-countdown {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(212, 194, 79, 0.14);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.np-desc {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 10px 0 0;
+}
+
+.np-link {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.np-link:hover { text-decoration: underline; }
+
+.cta-big {
+  display: inline-block;
+  padding: 13px 26px;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 16px;
+  text-decoration: none;
+  border-radius: 8px;
+  letter-spacing: 0.3px;
+}
+
+.cta-big:hover { background: #e6d46a; }
+
+#playtests h2 {
+  font-size: clamp(22px, 4vw, 30px);
+  margin: 0 0 22px;
+}
+
+.pt-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pt-item {
+  display: flex;
+  gap: 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.pt-item.is-upcoming { border-left: 3px solid var(--accent); }
+
+.pt-item.is-live {
+  border-left: 3px solid var(--accent);
+  background: rgba(212, 194, 79, 0.07);
+}
+
+.pt-item.is-past { opacity: 0.62; }
+
+.pt-date {
+  flex: 0 0 116px;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.pt-item.is-past .pt-date { color: var(--muted); }
+
+.pt-body {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.pt-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pt-title {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.pt-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pt-item.is-upcoming .pt-badge,
+.pt-item.is-live .pt-badge {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pt-time {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.pt-desc {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.pt-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.pt-link:hover { text-decoration: underline; }
+
+.pt-note {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.pt-empty { color: var(--muted); }
+
+footer {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 28px 20px 44px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+footer p { margin: 6px 0; }
+
+.author {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.author-name {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.social {
+  display: inline-flex;
+  color: var(--muted);
+  transition: color 0.15s;
+}
+
+.social:hover { color: var(--accent); }
+
+.social svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  fill: currentColor;
+}
+
+@media (max-width: 560px) {
+  .pt-item {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .pt-date { flex-basis: auto; }
+  section { padding: 40px 0; }
+}

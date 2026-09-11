@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ANOMA WIKI</title>
+<link rel="stylesheet" href="/styles.css">
+<!-- Yandex.Metrika counter -->
+<!-- Счётчик восстановить с сервера: номер счётчика в снапшот страницы не попал. -->
+<!-- /Yandex.Metrika counter -->
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="#home">
+    <img src="/logo.png" alt="ANOMA">
+    <span class="wiki">WIKI</span>
+  </a>
+  <nav class="site-nav">
+    <a href="#home">Главная</a>
+    <a href="#playtests">Календарь плейтестов</a>
+    <a class="cta" href="/art-calc">Калькулятор →</a>
+  </nav>
+</header>
+
+<main>
+  <section id="home" class="hero">
+    <h1>ANOMA <span class="wiki">WIKI</span></h1>
+    <p class="lede">
+      ANOMA WIKI — вики с калькуляторами по MMORPG в сеттинге STALKER с элементами
+      выживания, сочетающей open-world PvP/PvE-контент и extraction-геймплей.
+    </p>
+    <p class="lede-sub">
+      Подробнее об игре — <a href="https://anoma.su/faq" target="_blank" rel="noopener">официальный FAQ&nbsp;→</a>
+    </p>
+
+    <div class="next-playtest" id="next-playtest">
+      <div class="np-label">Ближайший плейтест</div>
+      <div class="np-title" id="np-title"></div>
+      <div class="np-when" id="np-when"></div>
+      <div class="np-countdown" id="np-countdown"></div>
+    </div>
+
+    <a class="cta-big" href="/art-calc">Калькулятор артиллерии →</a>
+  </section>
+
+  <section id="playtests">
+    <h2>Календарь плейтестов</h2>
+    <ol class="pt-list" id="pt-list"></ol>
+    <p class="pt-note">Информация обновляется по мере появления новых данных.</p>
+  </section>
+</main>
+
+<footer>
+  <p>Фанатский проект. Не официальный сайт ANOMA. Официальный сайт — <a href="https://anoma.su/" target="_blank" rel="noopener">anoma.su</a>.</p>
+  <p class="author">
+    <span>Автор — <span class="author-name">@Gorkeder</span></span>
+    <a class="social" href="https://t.me/Gorkeder" target="_blank" rel="noopener" aria-label="Telegram @Gorkeder" title="Telegram">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"></path></svg>
+    </a>
+    <a class="social" href="https://discord.com/users/613360177223041034" target="_blank" rel="noopener" aria-label="Discord Gorkeder" title="Discord">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 0 0-4.8851-1.5152.0741.0741 0 0 0-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 0 0-.0785-.037 19.7363 19.7363 0 0 0-4.8852 1.515.0699.0699 0 0 0-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 0 0 .0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 0 0 .0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 0 0-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 0 1-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 0 1 .0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 0 1 .0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 0 1-.0066.1276 12.2986 12.2986 0 0 1-1.873.8914.0766.0766 0 0 0-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 0 0 .0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 0 0 .0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 0 0-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z"></path></svg>
+    </a>
+  </p>
+</footer>
+
+<script>
+// Плейтесты в порядке показа: сначала предстоящие, затем прошедшие от новых к старым.
+// tentative — дата ещё не объявлена точно, обратный отсчёт не показывается.
+const PLAYTESTS = [
+  {
+    title: 'Тест открытого мира',
+    dateLabel: 'Конец сентября — начало октября 2026',
+    tentative: true
+  },
+  {
+    title: 'Плейтест №3 — война группировок',
+    dateLabel: '6 сентября 2026',
+    start: '2026-09-06T16:00:00+03:00',
+    end: '2026-09-06T22:00:00+03:00',
+    time: '16:00–22:00 МСК',
+    desc: 'Тест захватов для владельцев всех изданий. Упор на позиционную игру, командное взаимодействие и распределение ролей; транспорт как дополнительный тактический слой для перемещения, атаки и обороны. Отдельно проверяли боеприпасы — один и тот же ствол играет по-разному в зависимости от патрона. В игре открывался список серверов, на каждом две стороны: «Долг» и «Свобода».',
+    link: 'https://discord.com/channels/1412753513603141664/1412753631844761740/1545389308154871869'
+  },
+  {
+    title: 'Плейтест №2 — PvP Deathmatch',
+    dateLabel: '2 августа 2026',
+    start: '2026-08-02T16:00:00+03:00',
+    end: '2026-08-02T22:00:00+03:00',
+    time: '16:00–22:00 МСК',
+    desc: 'Повторная сессия, уже для владельцев всех изданий. Снова PvP Deathmatch. Тестировали новое снаряжение и множество правок, внесённых после первого плейтеста по отзывам игроков.',
+    link: 'https://discord.com/channels/1412753513603141664/1412753631844761740/1533162589901816038'
+  },
+  {
+    title: 'Плейтест №1 — PvP Deathmatch',
+    dateLabel: '27 июля 2026',
+    start: '2026-07-27T16:00:00+03:00',
+    end: '2026-07-27T22:00:00+03:00',
+    time: '16:00–22:00 МСК',
+    desc: 'Первое открытие игры, для владельцев издания «Саркофаг». Сессионный PvP Deathmatch: проверка оружия и ощущения стрельбы в бою, первое знакомство с аномалиями. Главная цель — собрать отзывы игроков.',
+    link: 'https://discord.com/channels/1412753513603141664/1412753631844761740/1530958960147038348'
+  }
+];
+
+const BADGE = {
+  tentative: 'Предварительно',
+  upcoming: 'Скоро',
+  live: 'Идёт',
+  past: 'Прошёл'
+};
+
+function statusOf(pt, now) {
+  if (pt.tentative) return 'tentative';
+  const start = new Date(pt.start);
+  const end = pt.end ? new Date(pt.end) : start;
+  if (now < start) return 'upcoming';
+  if (now <= end) return 'live';
+  return 'past';
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function countdownText(pt, status, now) {
+  if (status === 'tentative') return 'предварительно';
+  if (status === 'live') return 'идёт сейчас';
+  if (status === 'past') return 'прошёл';
+  const left = new Date(pt.start) - now;
+  const days = Math.floor(left / 86400000);
+  const hours = Math.floor(left / 3600000) % 24;
+  const mins = Math.floor(left / 60000) % 60;
+  if (days > 0) return `через ${days} дн. ${hours} ч.`;
+  if (hours > 0) return `через ${hours} ч. ${mins} мин.`;
+  return `через ${Math.max(mins, 1)} мин.`;
+}
+
+function renderList(now) {
+  const list = document.getElementById('pt-list');
+  if (!PLAYTESTS.length) {
+    list.innerHTML = '<li class="pt-empty">Плейтестов пока нет.</li>';
+    return;
+  }
+  list.innerHTML = PLAYTESTS.map(pt => {
+    const status = statusOf(pt, now);
+    const cls = status === 'past' ? 'is-past' : status === 'live' ? 'is-live' : 'is-upcoming';
+    return `<li class="pt-item ${cls}">
+      <div class="pt-date">${esc(pt.dateLabel)}</div>
+      <div class="pt-body">
+        <div class="pt-head">
+          <span class="pt-title">${esc(pt.title)}</span>
+          <span class="pt-badge">${BADGE[status]}</span>
+        </div>
+        ${pt.time ? `<div class="pt-time">${esc(pt.time)}</div>` : ''}
+        ${pt.desc ? `<p class="pt-desc">${esc(pt.desc)}</p>` : ''}
+        ${pt.link ? `<a class="pt-link" href="${esc(pt.link)}" target="_blank" rel="noopener">Объявление в Discord →</a>` : ''}
+      </div>
+    </li>`;
+  }).join('');
+}
+
+function renderNext(now) {
+  const box = document.getElementById('next-playtest');
+  const next = PLAYTESTS.find(pt => statusOf(pt, now) !== 'past');
+  if (!next) {
+    box.hidden = true;
+    return;
+  }
+  const status = statusOf(next, now);
+  document.getElementById('np-title').textContent = next.title;
+  document.getElementById('np-when').textContent = next.dateLabel + (next.time ? ', ' + next.time : '');
+  document.getElementById('np-countdown').textContent = countdownText(next, status, now);
+}
+
+function render() {
+  const now = new Date();
+  renderList(now);
+  renderNext(now);
+}
+
+render();
+setInterval(render, 60000);
+</script>
+</body>
+</html>
