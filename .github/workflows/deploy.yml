@@ -1,0 +1,39 @@
+name: Deploy to VPS
+
+# Заливает файлы сайта на VPS по SSH при каждом пуше в master.
+# Требуются секреты репозитория (Settings -> Secrets and variables -> Actions):
+#   SSH_PRIVATE_KEY — приватный ключ деплоя (публичный лежит в authorized_keys на сервере)
+#   SSH_HOST        — IP или домен сервера
+#   SSH_USER        — пользователь для входа по SSH
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        run: ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy via rsync
+        run: |
+          rsync -avz \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '.gitignore' \
+            --exclude '.gitattributes' \
+            --exclude 'tools' \
+            --exclude 'RELEASE.md' \
+            -e "ssh -o StrictHostKeyChecking=no" \
+            ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/anoma/"
