@@ -304,12 +304,13 @@
   }
 
   function videoCardHtml(v) {
+    var img = v.thumbnail ? '<img src="' + esc(v.thumbnail) + '" alt="" loading="lazy">' : '';
     return '<li>' +
       '<a class="vf-card" href="https://www.youtube.com/watch?v=' + esc(v.id) + '" target="_blank" rel="noopener">' +
-        '<img src="' + esc(v.thumbnail) + '" alt="" loading="lazy">' +
+        img +
         '<div class="vf-card-body">' +
           '<div class="vf-card-title">' + esc(v.title) + '</div>' +
-          '<div class="vf-card-meta">' + esc(v.channel) + ' &middot; ' + formatViews(v.views) + '</div>' +
+          '<div class="vf-card-meta">' + esc(v.channel) + ' &middot; ' + esc(formatViews(v.views)) + '</div>' +
         '</div>' +
       '</a>' +
     '</li>';
