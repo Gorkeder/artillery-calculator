@@ -38,7 +38,7 @@ function buildUrl(pathname, params) {
   return url.toString();
 }
 
-async function fetchChannelVideos(fetchImpl, apiKey, channel) {
+async function fetchChannelVideos(fetchImpl, apiKey, channel, officialChannelId) {
   const channelsUrl = buildUrl('/channels', { part: 'contentDetails', id: channel.id, key: apiKey });
   const channelsData = await fetchJson(fetchImpl, channelsUrl);
   const uploadsPlaylistId = channelsData.items &&
@@ -69,13 +69,14 @@ async function fetchChannelVideos(fetchImpl, apiKey, channel) {
     thumbnail: item.snippet.thumbnails && item.snippet.thumbnails.medium && item.snippet.thumbnails.medium.url,
     publishedAt: item.snippet.publishedAt,
     views: Number((item.statistics && item.statistics.viewCount) || 0),
+    official: channel.id === officialChannelId,
   }));
 }
 
-async function fetchFeed(channels, { fetchImpl = fetch, apiKey, now = () => new Date() } = {}) {
+async function fetchFeed(channels, { fetchImpl = fetch, apiKey, officialChannelId, now = () => new Date() } = {}) {
   const allVideos = [];
   for (const channel of channels) {
-    const videos = await fetchChannelVideos(fetchImpl, apiKey, channel);
+    const videos = await fetchChannelVideos(fetchImpl, apiKey, channel, officialChannelId);
     allVideos.push(...videos);
   }
   const nowMs = now().getTime();
@@ -115,9 +116,10 @@ async function main() {
   }
 
   const outputPath = process.env.OUTPUT_PATH || path.join(process.cwd(), 'videos.json');
+  const officialChannelId = (process.env.YOUTUBE_OFFICIAL_CHANNEL_ID || '').trim() || undefined;
 
   try {
-    const feed = await fetchFeed(channels, { apiKey });
+    const feed = await fetchFeed(channels, { apiKey, officialChannelId });
     writeAtomic(outputPath, feed);
     console.error('videos.json обновлён:', feed.newest.length, 'новых,', feed.popular.length, 'популярных');
   } catch (err) {

@@ -81,10 +81,17 @@ node tools/decrypt-map.js      # map.enc -> map.js
    ```
    YOUTUBE_API_KEY=<ключ из Google Cloud Console>
    YOUTUBE_CHANNELS=UCxxxxxxxx:Имя канала 1,UCyyyyyyyy:Имя канала 2
+   YOUTUBE_OFFICIAL_CHANNEL_ID=UCxxxxxxxx
    OUTPUT_PATH=/var/www/anoma/videos.json
    ```
    Разбор `YOUTUBE_CHANNELS` наивный (просто split по запятой), поэтому имена
    каналов не должны содержать запятых.
+
+   `YOUTUBE_OFFICIAL_CHANNEL_ID` — необязательный, id одного из каналов
+   выше (должен совпадать один в один с частью до `:` в `YOUTUBE_CHANNELS`).
+   Видео с этого канала помечаются на сайте золотой рамкой и бейджем
+   «Официальный». Если не задать — выделения не будет, но лента продолжит
+   работать как обычно.
 
 3. Проверить вручную:
    ```

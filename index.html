@@ -314,10 +314,13 @@
     var dateLabel = formatVideoDate(v.publishedAt);
     var meta = [v.channel, formatViews(v.views)];
     if (dateLabel) meta.push(dateLabel);
+    var cardClass = 'vf-card' + (v.official ? ' vf-card--official' : '');
+    var badge = v.official ? '<span class="vf-card-badge">Официальный</span>' : '';
     return '<li>' +
-      '<a class="vf-card" href="https://www.youtube.com/watch?v=' + esc(v.id) + '" target="_blank" rel="noopener">' +
+      '<a class="' + cardClass + '" href="https://www.youtube.com/watch?v=' + esc(v.id) + '" target="_blank" rel="noopener">' +
         img +
         '<div class="vf-card-body">' +
+          badge +
           '<div class="vf-card-title">' + esc(v.title) + '</div>' +
           '<div class="vf-card-meta">' + meta.map(esc).join(' &middot; ') + '</div>' +
         '</div>' +

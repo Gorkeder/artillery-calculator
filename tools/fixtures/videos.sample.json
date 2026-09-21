@@ -3,11 +3,12 @@
   "newest": [
     {
       "id": "dQw4w9WgXcQ",
-      "title": "Новый обзор оружия в ANOMA",
-      "channel": "Тестовый Летсплейщик",
+      "title": "Официальный тизер обновления",
+      "channel": "ANOMA",
       "thumbnail": "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg",
       "publishedAt": "2026-09-21T09:00:00Z",
-      "views": 4300
+      "views": 4300,
+      "official": true
     },
     {
       "id": "9bZkp7q19f0",
@@ -15,7 +16,8 @@
       "channel": "Игровой Канал",
       "thumbnail": "https://i.ytimg.com/vi/9bZkp7q19f0/mqdefault.jpg",
       "publishedAt": "2026-09-19T15:00:00Z",
-      "views": 12000
+      "views": 12000,
+      "official": false
     }
   ],
   "popular": [
@@ -25,7 +27,8 @@
       "channel": "Игровой Канал",
       "thumbnail": "https://i.ytimg.com/vi/3JZ_D3ELwOQ/mqdefault.jpg",
       "publishedAt": "2026-09-05T10:00:00Z",
-      "views": 210000
+      "views": 210000,
+      "official": false
     },
     {
       "id": "L_jWHffIx5E",
@@ -33,7 +36,8 @@
       "channel": "Тестовый Летсплейщик",
       "thumbnail": "https://i.ytimg.com/vi/L_jWHffIx5E/mqdefault.jpg",
       "publishedAt": "2026-08-30T18:00:00Z",
-      "views": 87000
+      "views": 87000,
+      "official": false
     }
   ]
 }

@@ -62,6 +62,60 @@ test('fetchFeed assembles newest and popular videos from one channel', async () 
   assert.equal(feed.popular[0].channel, 'Тестовый канал');
 });
 
+test('fetchFeed marks videos from the official channel and leaves others unmarked', async () => {
+  const official = { id: 'UCofficial', name: 'ANOMA' };
+  const other = { id: 'UCother', name: 'Другой канал' };
+  const fetchImpl = fakeFetch([
+    ['/channels?', { items: [{ contentDetails: { relatedPlaylists: { uploads: 'PLxyz' } } }] }],
+    ['/playlistItems?', { items: [{ snippet: { resourceId: { videoId: 'vid1' } } }] }],
+    ['/videos?', {
+      items: [
+        {
+          id: 'vid1',
+          snippet: {
+            title: 'Видео',
+            publishedAt: '2026-09-20T00:00:00Z',
+            thumbnails: { medium: { url: 'https://x/1.jpg' } },
+          },
+          statistics: { viewCount: '100' },
+        },
+      ],
+    }],
+  ]);
+
+  const feed = await fetchFeed([official, other], {
+    fetchImpl,
+    apiKey: 'test-key',
+    officialChannelId: 'UCofficial',
+    now: () => new Date('2026-09-21T00:00:00Z'),
+  });
+
+  assert.equal(feed.newest.length, 2);
+  const officialVideo = feed.newest.find((v) => v.channel === 'ANOMA');
+  const otherVideo = feed.newest.find((v) => v.channel === 'Другой канал');
+  assert.equal(officialVideo.official, true);
+  assert.equal(otherVideo.official, false);
+});
+
+test('fetchFeed leaves official false for every video when officialChannelId is not set', async () => {
+  const channel = { id: 'UCabc', name: 'Тестовый канал' };
+  const fetchImpl = fakeFetch([
+    ['/channels?', { items: [{ contentDetails: { relatedPlaylists: { uploads: 'PLxyz' } } }] }],
+    ['/playlistItems?', { items: [{ snippet: { resourceId: { videoId: 'vid1' } } }] }],
+    ['/videos?', {
+      items: [{
+        id: 'vid1',
+        snippet: { title: 'Видео', publishedAt: '2026-09-20T00:00:00Z', thumbnails: { medium: { url: 'https://x/1.jpg' } } },
+        statistics: { viewCount: '100' },
+      }],
+    }],
+  ]);
+
+  const feed = await fetchFeed([channel], { fetchImpl, apiKey: 'test-key' });
+
+  assert.equal(feed.newest[0].official, false);
+});
+
 test('fetchFeed rejects when a channel has no uploads playlist', async () => {
   const channel = { id: 'UCbad', name: 'Битый канал' };
   const fetchImpl = fakeFetch([
