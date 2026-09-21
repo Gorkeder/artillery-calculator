@@ -62,3 +62,69 @@ node tools/encrypt-map.js      # map.js -> map.enc
 export MAP_KEY=<64 hex-символа>
 node tools/decrypt-map.js      # map.enc -> map.js
 ```
+
+## Лента видео ютуберов (`videos.json`)
+
+Панель с видео на главной читает статический `/var/www/anoma/videos.json`.
+Файл генерирует `tools/youtube-feed-fetcher.js` — этот скрипт **не входит**
+в обычный деплой (`tools/` исключена из `deploy.yml`), поэтому его нужно
+один раз вручную скопировать на VPS и повесить на cron.
+
+1. Скопировать на сервер (в любую рабочую папку, не обязательно в
+   `/var/www/anoma`):
+   ```
+   scp tools/youtube-feed-lib.js tools/youtube-feed-fetcher.js deploy@<host>:/opt/anoma-tools/
+   ```
+
+2. На сервере создать файл окружения (например `/opt/anoma-tools/.env`,
+   права `600`, не в git):
+   ```
+   YOUTUBE_API_KEY=<ключ из Google Cloud Console>
+   YOUTUBE_CHANNELS=UCxxxxxxxx:Имя канала 1,UCyyyyyyyy:Имя канала 2
+   YOUTUBE_OFFICIAL_CHANNEL_ID=UCxxxxxxxx
+   OUTPUT_PATH=/var/www/anoma/videos.json
+   ```
+   Разбор `YOUTUBE_CHANNELS` наивный (просто split по запятой), поэтому имена
+   каналов не должны содержать запятых.
+
+   `YOUTUBE_OFFICIAL_CHANNEL_ID` — необязательный, id одного из каналов
+   выше (должен совпадать один в один с частью до `:` в `YOUTUBE_CHANNELS`).
+   Видео с этого канала помечаются на сайте золотой рамкой и бейджем
+   «Официальный». Если не задать — выделения не будет, но лента продолжит
+   работать как обычно.
+
+3. Проверить вручную:
+   ```
+   set -a; source /opt/anoma-tools/.env; set +a
+   node /opt/anoma-tools/youtube-feed-fetcher.js
+   cat /var/www/anoma/videos.json
+   ```
+   Файл пишется с правами по умолчанию (umask пользователя, от которого
+   запущен cron), поэтому после первого прогона стоит убедиться, что nginx
+   (обычно `www-data`) вообще может его прочитать:
+   ```
+   sudo -u www-data cat /var/www/anoma/videos.json
+   # или
+   ls -l /var/www/anoma/videos.json
+   ```
+   Если файл нечитаем — `chmod 644 /var/www/anoma/videos.json` или поправить
+   umask пользователя cron. Иначе панель с видео на сайте просто молча
+   исчезнет (неотличимо от «лента ещё не готова»).
+
+4. Добавить в crontab пользователя, от которого можно писать в
+   `/var/www/anoma` (запуск раз в час):
+   ```
+   0 * * * * . /opt/anoma-tools/.env && /usr/bin/node /opt/anoma-tools/youtube-feed-fetcher.js >> /var/log/anoma-video-feed.log 2>&1
+   ```
+
+Обновить список каналов — отредактировать `YOUTUBE_CHANNELS` в
+`/opt/anoma-tools/.env` на сервере и один раз прогнать скрипт вручную
+(шаг 3), в репозиторий список каналов не попадает.
+
+Если у одного из каналов упадёт запрос (канал удалён/переименован/стал
+приватным), скрипт по задумке прерывает весь прогон и **не трогает**
+`videos.json` — лента молча замораживается на последнем удачном снепшоте,
+и никакого предупреждения на сайте не будет. Заметить это можно так:
+проверить `tail /var/log/anoma-video-feed.log` на свежие ошибки, и/или
+посмотреть поле `generatedAt` в `/var/www/anoma/videos.json` — если оно
+сильно отстаёт от текущего времени, лента давно не обновлялась.

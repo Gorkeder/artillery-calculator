@@ -29,8 +29,36 @@
     <a href="#home">Главная</a>
     <a href="#playtests">Календарь плейтестов</a>
     <a class="cta" href="/art-calc">Калькулятор &rarr;</a>
+    <button type="button" class="video-feed-nav-btn" id="video-feed-nav-btn"
+      aria-expanded="false" aria-controls="video-feed-panel" aria-label="Видео ютуберов">
+      <span aria-hidden="true">&#9654;</span>
+    </button>
   </nav>
 </header>
+
+<button type="button" class="video-feed-tab" id="video-feed-tab"
+  aria-expanded="false" aria-controls="video-feed-panel">
+  <span class="vft-icon" aria-hidden="true">&#9654;</span>
+  <span class="vft-label">Видео</span>
+</button>
+
+<aside class="video-feed-panel" id="video-feed-panel">
+  <div class="vfp-head">
+    <span class="vfp-title">Видео ютуберов</span>
+    <button type="button" class="vfp-close" id="video-feed-close" aria-label="Закрыть">&#10005;</button>
+  </div>
+  <div class="vfp-body">
+    <section class="vfp-section">
+      <h3 class="vfp-h">Новинки</h3>
+      <ul class="vfp-list" id="video-feed-newest"></ul>
+    </section>
+    <section class="vfp-section">
+      <h3 class="vfp-h">Популярное</h3>
+      <ul class="vfp-list" id="video-feed-popular"></ul>
+    </section>
+  </div>
+</aside>
+<div class="video-feed-overlay" id="video-feed-overlay" hidden></div>
 
 <main>
   <section id="home" class="hero">
@@ -269,10 +297,95 @@
     }).join('');
   }
 
+  function formatViews(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + ' млн просмотров';
+    if (n >= 1000) return Math.round(n / 1000) + ' тыс. просмотров';
+    return n + ' просмотров';
+  }
+
+  function formatVideoDate(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.getDate() + ' ' + MONTHS_GEN[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
+  function videoCardHtml(v) {
+    var img = v.thumbnail ? '<img src="' + esc(v.thumbnail) + '" alt="" loading="lazy">' : '';
+    var dateLabel = formatVideoDate(v.publishedAt);
+    var meta = [v.channel, formatViews(v.views)];
+    if (dateLabel) meta.push(dateLabel);
+    var cardClass = 'vf-card' + (v.official ? ' vf-card--official' : '');
+    var badge = v.official ? '<span class="vf-card-badge">Официальный</span>' : '';
+    return '<li>' +
+      '<a class="' + cardClass + '" href="https://www.youtube.com/watch?v=' + esc(v.id) + '" target="_blank" rel="noopener">' +
+        img +
+        '<div class="vf-card-body">' +
+          badge +
+          '<div class="vf-card-title">' + esc(v.title) + '</div>' +
+          '<div class="vf-card-meta">' + meta.map(esc).join(' &middot; ') + '</div>' +
+        '</div>' +
+      '</a>' +
+    '</li>';
+  }
+
+  function openVideoFeed() {
+    document.getElementById('video-feed-panel').classList.add('is-open');
+    document.getElementById('video-feed-overlay').hidden = false;
+    document.getElementById('video-feed-tab').setAttribute('aria-expanded', 'true');
+    document.getElementById('video-feed-nav-btn').setAttribute('aria-expanded', 'true');
+  }
+
+  function closeVideoFeed() {
+    document.getElementById('video-feed-panel').classList.remove('is-open');
+    document.getElementById('video-feed-overlay').hidden = true;
+    document.getElementById('video-feed-tab').setAttribute('aria-expanded', 'false');
+    document.getElementById('video-feed-nav-btn').setAttribute('aria-expanded', 'false');
+  }
+
+  function hideVideoFeedTriggers() {
+    document.getElementById('video-feed-tab').hidden = true;
+    document.getElementById('video-feed-nav-btn').hidden = true;
+  }
+
+  function initVideoFeed() {
+    var tab = document.getElementById('video-feed-tab');
+    var navBtn = document.getElementById('video-feed-nav-btn');
+    var closeBtn = document.getElementById('video-feed-close');
+    var overlay = document.getElementById('video-feed-overlay');
+
+    tab.addEventListener('click', openVideoFeed);
+    navBtn.addEventListener('click', openVideoFeed);
+    closeBtn.addEventListener('click', closeVideoFeed);
+    overlay.addEventListener('click', closeVideoFeed);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && document.getElementById('video-feed-panel').classList.contains('is-open')) {
+        closeVideoFeed();
+      }
+    });
+
+    fetch('/videos.json')
+      .then(function (res) {
+        if (!res.ok) throw new Error('videos.json недоступен');
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data.newest || !data.newest.length) {
+          hideVideoFeedTriggers();
+          return;
+        }
+        document.getElementById('video-feed-newest').innerHTML = data.newest.map(videoCardHtml).join('');
+        document.getElementById('video-feed-popular').innerHTML = (data.popular || []).map(videoCardHtml).join('');
+      })
+      .catch(function () {
+        hideVideoFeedTriggers();
+      });
+  }
+
   var now = new Date();
   var entries = normalize(PLAYTESTS, now);
   renderNext(entries, now);
   renderList(entries);
+  initVideoFeed();
 })();
 </script>
 </body>

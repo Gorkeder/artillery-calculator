@@ -1,0 +1,43 @@
+{
+  "generatedAt": "2026-09-21T12:00:00Z",
+  "newest": [
+    {
+      "id": "dQw4w9WgXcQ",
+      "title": "Официальный тизер обновления",
+      "channel": "ANOMA",
+      "thumbnail": "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg",
+      "publishedAt": "2026-09-21T09:00:00Z",
+      "views": 4300,
+      "official": true
+    },
+    {
+      "id": "9bZkp7q19f0",
+      "title": "Плейтест №3: разбор фракций",
+      "channel": "Игровой Канал",
+      "thumbnail": "https://i.ytimg.com/vi/9bZkp7q19f0/mqdefault.jpg",
+      "publishedAt": "2026-09-19T15:00:00Z",
+      "views": 12000,
+      "official": false
+    }
+  ],
+  "popular": [
+    {
+      "id": "3JZ_D3ELwOQ",
+      "title": "ANOMA — лучшие моменты плейтеста",
+      "channel": "Игровой Канал",
+      "thumbnail": "https://i.ytimg.com/vi/3JZ_D3ELwOQ/mqdefault.jpg",
+      "publishedAt": "2026-09-05T10:00:00Z",
+      "views": 210000,
+      "official": false
+    },
+    {
+      "id": "L_jWHffIx5E",
+      "title": "Гайд по аномалиям для новичков",
+      "channel": "Тестовый Летсплейщик",
+      "thumbnail": "https://i.ytimg.com/vi/L_jWHffIx5E/mqdefault.jpg",
+      "publishedAt": "2026-08-30T18:00:00Z",
+      "views": 87000,
+      "official": false
+    }
+  ]
+}
