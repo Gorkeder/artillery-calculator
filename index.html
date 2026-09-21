@@ -37,9 +37,13 @@
 </header>
 
 <button type="button" class="video-feed-tab" id="video-feed-tab"
-  aria-expanded="false" aria-controls="video-feed-panel">
-  <span class="vft-icon" aria-hidden="true">&#9654;</span>
-  <span class="vft-label">Видео</span>
+  aria-expanded="false" aria-controls="video-feed-panel" aria-label="Видео ютуберов" hidden>
+  <img class="vft-thumb" id="video-feed-tab-img" src="" alt="" loading="lazy">
+  <span class="vft-info">
+    <span class="vft-title" id="video-feed-tab-title"></span>
+    <span class="vft-channel" id="video-feed-tab-channel"></span>
+  </span>
+  <span class="vft-arrow" aria-hidden="true">&#9654;</span>
 </button>
 
 <aside class="video-feed-panel" id="video-feed-panel">
@@ -317,7 +321,7 @@
     var cardClass = 'vf-card' + (v.official ? ' vf-card--official' : '');
     var badge = v.official ? '<span class="vf-card-badge">Официальный</span>' : '';
     return '<li>' +
-      '<a class="' + cardClass + '" href="https://www.youtube.com/watch?v=' + esc(v.id) + '" target="_blank" rel="noopener">' +
+      '<a class="' + cardClass + '" data-video-id="' + esc(v.id) + '" href="https://www.youtube.com/watch?v=' + esc(v.id) + '" target="_blank" rel="noopener">' +
         img +
         '<div class="vf-card-body">' +
           badge +
@@ -328,11 +332,56 @@
     '</li>';
   }
 
+  var featuredVideoId = null;
+
+  function renderVideoFeedTab(featured) {
+    var tab = document.getElementById('video-feed-tab');
+    if (!featured) {
+      tab.hidden = true;
+      return;
+    }
+    var img = document.getElementById('video-feed-tab-img');
+    if (featured.thumbnail) {
+      img.src = featured.thumbnail;
+    } else {
+      img.removeAttribute('src');
+    }
+    document.getElementById('video-feed-tab-title').textContent = featured.title;
+    document.getElementById('video-feed-tab-channel').textContent = featured.channel;
+    tab.hidden = false;
+  }
+
+  function triggerVideoWave() {
+    var cards = document.querySelectorAll('#video-feed-panel .vf-card');
+    cards.forEach(function (card, i) {
+      if (card._vfWaveHandler) {
+        card.removeEventListener('animationend', card._vfWaveHandler);
+        card.removeEventListener('animationcancel', card._vfWaveHandler);
+        card._vfWaveHandler = null;
+      }
+      card.classList.remove('vf-wave', 'vf-wave-target');
+      void card.offsetWidth;
+      card.style.setProperty('--i', i);
+      var isTarget = !!featuredVideoId && card.getAttribute('data-video-id') === featuredVideoId;
+      card.classList.add(isTarget ? 'vf-wave-target' : 'vf-wave');
+      var handler = function () {
+        card.classList.remove('vf-wave', 'vf-wave-target');
+        card.removeEventListener('animationend', handler);
+        card.removeEventListener('animationcancel', handler);
+        card._vfWaveHandler = null;
+      };
+      card._vfWaveHandler = handler;
+      card.addEventListener('animationend', handler);
+      card.addEventListener('animationcancel', handler);
+    });
+  }
+
   function openVideoFeed() {
     document.getElementById('video-feed-panel').classList.add('is-open');
     document.getElementById('video-feed-overlay').hidden = false;
     document.getElementById('video-feed-tab').setAttribute('aria-expanded', 'true');
     document.getElementById('video-feed-nav-btn').setAttribute('aria-expanded', 'true');
+    triggerVideoWave();
   }
 
   function closeVideoFeed() {
@@ -375,6 +424,10 @@
         }
         document.getElementById('video-feed-newest').innerHTML = data.newest.map(videoCardHtml).join('');
         document.getElementById('video-feed-popular').innerHTML = (data.popular || []).map(videoCardHtml).join('');
+
+        var featured = (data.popular && data.popular[0]) || data.newest[0];
+        featuredVideoId = featured.id;
+        renderVideoFeedTab(featured);
       })
       .catch(function () {
         hideVideoFeedTriggers();
