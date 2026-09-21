@@ -303,14 +303,23 @@
     return n + ' просмотров';
   }
 
+  function formatVideoDate(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.getDate() + ' ' + MONTHS_GEN[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
   function videoCardHtml(v) {
     var img = v.thumbnail ? '<img src="' + esc(v.thumbnail) + '" alt="" loading="lazy">' : '';
+    var dateLabel = formatVideoDate(v.publishedAt);
+    var meta = [v.channel, formatViews(v.views)];
+    if (dateLabel) meta.push(dateLabel);
     return '<li>' +
       '<a class="vf-card" href="https://www.youtube.com/watch?v=' + esc(v.id) + '" target="_blank" rel="noopener">' +
         img +
         '<div class="vf-card-body">' +
           '<div class="vf-card-title">' + esc(v.title) + '</div>' +
-          '<div class="vf-card-meta">' + esc(v.channel) + ' &middot; ' + esc(formatViews(v.views)) + '</div>' +
+          '<div class="vf-card-meta">' + meta.map(esc).join(' &middot; ') + '</div>' +
         '</div>' +
       '</a>' +
     '</li>';
@@ -345,6 +354,11 @@
     navBtn.addEventListener('click', openVideoFeed);
     closeBtn.addEventListener('click', closeVideoFeed);
     overlay.addEventListener('click', closeVideoFeed);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && document.getElementById('video-feed-panel').classList.contains('is-open')) {
+        closeVideoFeed();
+      }
+    });
 
     fetch('/videos.json')
       .then(function (res) {

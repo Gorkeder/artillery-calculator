@@ -10,16 +10,36 @@ const POPULAR_LIMIT = 8;
 const NEWEST_LIMIT = 2;
 const ITEMS_PER_CHANNEL = 20;
 
+function redactUrl(url) {
+  try {
+    const redacted = new URL(url);
+    if (redacted.searchParams.has('key')) {
+      redacted.searchParams.set('key', '***');
+    }
+    return redacted.toString();
+  } catch (err) {
+    return url;
+  }
+}
+
 async function fetchJson(fetchImpl, url) {
   const res = await fetchImpl(url);
   if (!res.ok) {
-    throw new Error('YouTube API вернул ' + res.status + ' для ' + url);
+    throw new Error('YouTube API вернул ' + res.status + ' для ' + redactUrl(url));
   }
   return res.json();
 }
 
+function buildUrl(pathname, params) {
+  const url = new URL(API_BASE + pathname);
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+  return url.toString();
+}
+
 async function fetchChannelVideos(fetchImpl, apiKey, channel) {
-  const channelsUrl = API_BASE + '/channels?part=contentDetails&id=' + channel.id + '&key=' + apiKey;
+  const channelsUrl = buildUrl('/channels', { part: 'contentDetails', id: channel.id, key: apiKey });
   const channelsData = await fetchJson(fetchImpl, channelsUrl);
   const uploadsPlaylistId = channelsData.items &&
     channelsData.items[0] &&
@@ -28,15 +48,19 @@ async function fetchChannelVideos(fetchImpl, apiKey, channel) {
     throw new Error('Не найден uploads-плейлист для канала ' + channel.id);
   }
 
-  const playlistUrl = API_BASE + '/playlistItems?part=snippet&maxResults=' + ITEMS_PER_CHANNEL +
-    '&playlistId=' + uploadsPlaylistId + '&key=' + apiKey;
+  const playlistUrl = buildUrl('/playlistItems', {
+    part: 'snippet',
+    maxResults: ITEMS_PER_CHANNEL,
+    playlistId: uploadsPlaylistId,
+    key: apiKey,
+  });
   const playlistData = await fetchJson(fetchImpl, playlistUrl);
   const videoIds = (playlistData.items || [])
     .map((item) => item.snippet && item.snippet.resourceId && item.snippet.resourceId.videoId)
     .filter(Boolean);
   if (videoIds.length === 0) return [];
 
-  const videosUrl = API_BASE + '/videos?part=snippet,statistics&id=' + videoIds.join(',') + '&key=' + apiKey;
+  const videosUrl = buildUrl('/videos', { part: 'snippet,statistics', id: videoIds.join(','), key: apiKey });
   const videosData = await fetchJson(fetchImpl, videosUrl);
   return (videosData.items || []).map((item) => ({
     id: item.id,

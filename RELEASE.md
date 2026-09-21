@@ -83,6 +83,8 @@ node tools/decrypt-map.js      # map.enc -> map.js
    YOUTUBE_CHANNELS=UCxxxxxxxx:Имя канала 1,UCyyyyyyyy:Имя канала 2
    OUTPUT_PATH=/var/www/anoma/videos.json
    ```
+   Разбор `YOUTUBE_CHANNELS` наивный (просто split по запятой), поэтому имена
+   каналов не должны содержать запятых.
 
 3. Проверить вручную:
    ```
@@ -90,6 +92,17 @@ node tools/decrypt-map.js      # map.enc -> map.js
    node /opt/anoma-tools/youtube-feed-fetcher.js
    cat /var/www/anoma/videos.json
    ```
+   Файл пишется с правами по умолчанию (umask пользователя, от которого
+   запущен cron), поэтому после первого прогона стоит убедиться, что nginx
+   (обычно `www-data`) вообще может его прочитать:
+   ```
+   sudo -u www-data cat /var/www/anoma/videos.json
+   # или
+   ls -l /var/www/anoma/videos.json
+   ```
+   Если файл нечитаем — `chmod 644 /var/www/anoma/videos.json` или поправить
+   umask пользователя cron. Иначе панель с видео на сайте просто молча
+   исчезнет (неотличимо от «лента ещё не готова»).
 
 4. Добавить в crontab пользователя, от которого можно писать в
    `/var/www/anoma` (запуск раз в час):
@@ -100,3 +113,11 @@ node tools/decrypt-map.js      # map.enc -> map.js
 Обновить список каналов — отредактировать `YOUTUBE_CHANNELS` в
 `/opt/anoma-tools/.env` на сервере и один раз прогнать скрипт вручную
 (шаг 3), в репозиторий список каналов не попадает.
+
+Если у одного из каналов упадёт запрос (канал удалён/переименован/стал
+приватным), скрипт по задумке прерывает весь прогон и **не трогает**
+`videos.json` — лента молча замораживается на последнем удачном снепшоте,
+и никакого предупреждения на сайте не будет. Заметить это можно так:
+проверить `tail /var/log/anoma-video-feed.log` на свежие ошибки, и/или
+посмотреть поле `generatedAt` в `/var/www/anoma/videos.json` — если оно
+сильно отстаёт от текущего времени, лента давно не обновлялась.

@@ -35,5 +35,8 @@ jobs:
             --exclude '.gitattributes' \
             --exclude 'tools' \
             --exclude 'RELEASE.md' \
+            --exclude 'docs' \
+            --exclude '.superpowers' \
+            --exclude '.claude' \
             -e "ssh -o StrictHostKeyChecking=no" \
             ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/anoma/"
