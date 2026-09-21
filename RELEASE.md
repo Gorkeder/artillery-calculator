@@ -114,8 +114,19 @@ node tools/decrypt-map.js      # map.enc -> map.js
 4. Добавить в crontab пользователя, от которого можно писать в
    `/var/www/anoma` (запуск раз в час):
    ```
-   0 * * * * . /opt/anoma-tools/.env && /usr/bin/node /opt/anoma-tools/youtube-feed-fetcher.js >> /var/log/anoma-video-feed.log 2>&1
+   0 * * * * set -a; . /opt/anoma-tools/.env; set +a; /usr/bin/node /opt/anoma-tools/youtube-feed-fetcher.js >> /opt/anoma-tools/anoma-video-feed.log 2>&1
    ```
+   Два тонких места, из-за которых первая попытка тихо не срабатывает:
+   - Просто `. /opt/anoma-tools/.env` (без `set -a`/`set +a`) не экспортирует
+     переменные в окружение — `node` их не увидит и сразу упадёт с
+     «YOUTUBE_API_KEY не задан».
+   - `/var/log/` обычно недоступен для записи обычному пользователю
+     (`drwxrwxr-x root:syslog`) — cron-строка с `>> /var/log/...` в этом
+     случае молча не выполнится вообще (даже `node` не запустится), а
+     ошибку перенаправления cron просто выбросит («No MTA installed,
+     discarding output» в `journalctl -u cron`). Держите лог рядом со
+     скриптом — `/opt/anoma-tools/`, куда у пользователя cron точно есть
+     доступ на запись.
 
 Обновить список каналов — отредактировать `YOUTUBE_CHANNELS` в
 `/opt/anoma-tools/.env` на сервере и один раз прогнать скрипт вручную
@@ -125,6 +136,6 @@ node tools/decrypt-map.js      # map.enc -> map.js
 приватным), скрипт по задумке прерывает весь прогон и **не трогает**
 `videos.json` — лента молча замораживается на последнем удачном снепшоте,
 и никакого предупреждения на сайте не будет. Заметить это можно так:
-проверить `tail /var/log/anoma-video-feed.log` на свежие ошибки, и/или
+проверить `tail /opt/anoma-tools/anoma-video-feed.log` на свежие ошибки, и/или
 посмотреть поле `generatedAt` в `/var/www/anoma/videos.json` — если оно
 сильно отстаёт от текущего времени, лента давно не обновлялась.
