@@ -60,17 +60,19 @@ async function fetchChannelVideos(fetchImpl, apiKey, channel, officialChannelId)
     .filter(Boolean);
   if (videoIds.length === 0) return [];
 
-  const videosUrl = buildUrl('/videos', { part: 'snippet,statistics', id: videoIds.join(','), key: apiKey });
+  const videosUrl = buildUrl('/videos', { part: 'snippet,statistics,liveStreamingDetails', id: videoIds.join(','), key: apiKey });
   const videosData = await fetchJson(fetchImpl, videosUrl);
-  return (videosData.items || []).map((item) => ({
-    id: item.id,
-    title: item.snippet.title,
-    channel: channel.name,
-    thumbnail: item.snippet.thumbnails && item.snippet.thumbnails.medium && item.snippet.thumbnails.medium.url,
-    publishedAt: item.snippet.publishedAt,
-    views: Number((item.statistics && item.statistics.viewCount) || 0),
-    official: channel.id === officialChannelId,
-  }));
+  return (videosData.items || [])
+    .filter((item) => !item.liveStreamingDetails)
+    .map((item) => ({
+      id: item.id,
+      title: item.snippet.title,
+      channel: channel.name,
+      thumbnail: item.snippet.thumbnails && item.snippet.thumbnails.medium && item.snippet.thumbnails.medium.url,
+      publishedAt: item.snippet.publishedAt,
+      views: Number((item.statistics && item.statistics.viewCount) || 0),
+      official: channel.id === officialChannelId,
+    }));
 }
 
 async function fetchFeed(channels, { fetchImpl = fetch, apiKey, officialChannelId, now = () => new Date() } = {}) {

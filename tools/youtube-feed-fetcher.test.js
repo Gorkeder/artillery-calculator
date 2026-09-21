@@ -116,6 +116,43 @@ test('fetchFeed leaves official false for every video when officialChannelId is 
   assert.equal(feed.newest[0].official, false);
 });
 
+test('fetchFeed excludes videos that are (or were) a livestream', async () => {
+  const channel = { id: 'UCabc', name: 'Тестовый канал' };
+  const fetchImpl = fakeFetch([
+    ['/channels?', { items: [{ contentDetails: { relatedPlaylists: { uploads: 'PLxyz' } } }] }],
+    ['/playlistItems?', {
+      items: [
+        { snippet: { resourceId: { videoId: 'vid-regular' } } },
+        { snippet: { resourceId: { videoId: 'vid-stream' } } },
+      ],
+    }],
+    ['/videos?', {
+      items: [
+        {
+          id: 'vid-regular',
+          snippet: { title: 'Обычное видео', publishedAt: '2026-09-20T00:00:00Z', thumbnails: { medium: { url: 'https://x/1.jpg' } } },
+          statistics: { viewCount: '100' },
+        },
+        {
+          id: 'vid-stream',
+          snippet: { title: 'Запись стрима', publishedAt: '2026-09-19T00:00:00Z', thumbnails: { medium: { url: 'https://x/2.jpg' } } },
+          statistics: { viewCount: '0' },
+          liveStreamingDetails: { actualStartTime: '2026-09-19T00:00:00Z' },
+        },
+      ],
+    }],
+  ]);
+
+  const feed = await fetchFeed([channel], {
+    fetchImpl,
+    apiKey: 'test-key',
+    now: () => new Date('2026-09-21T00:00:00Z'),
+  });
+
+  assert.equal(feed.newest.length, 1);
+  assert.equal(feed.newest[0].id, 'vid-regular');
+});
+
 test('fetchFeed rejects when a channel has no uploads playlist', async () => {
   const channel = { id: 'UCbad', name: 'Битый канал' };
   const fetchImpl = fakeFetch([
