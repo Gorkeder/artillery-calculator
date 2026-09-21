@@ -297,10 +297,77 @@
     }).join('');
   }
 
+  function formatViews(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + ' млн просмотров';
+    if (n >= 1000) return Math.round(n / 1000) + ' тыс. просмотров';
+    return n + ' просмотров';
+  }
+
+  function videoCardHtml(v) {
+    return '<li>' +
+      '<a class="vf-card" href="https://www.youtube.com/watch?v=' + esc(v.id) + '" target="_blank" rel="noopener">' +
+        '<img src="' + esc(v.thumbnail) + '" alt="" loading="lazy">' +
+        '<div class="vf-card-body">' +
+          '<div class="vf-card-title">' + esc(v.title) + '</div>' +
+          '<div class="vf-card-meta">' + esc(v.channel) + ' &middot; ' + formatViews(v.views) + '</div>' +
+        '</div>' +
+      '</a>' +
+    '</li>';
+  }
+
+  function openVideoFeed() {
+    document.getElementById('video-feed-panel').classList.add('is-open');
+    document.getElementById('video-feed-overlay').hidden = false;
+    document.getElementById('video-feed-tab').setAttribute('aria-expanded', 'true');
+    document.getElementById('video-feed-nav-btn').setAttribute('aria-expanded', 'true');
+  }
+
+  function closeVideoFeed() {
+    document.getElementById('video-feed-panel').classList.remove('is-open');
+    document.getElementById('video-feed-overlay').hidden = true;
+    document.getElementById('video-feed-tab').setAttribute('aria-expanded', 'false');
+    document.getElementById('video-feed-nav-btn').setAttribute('aria-expanded', 'false');
+  }
+
+  function hideVideoFeedTriggers() {
+    document.getElementById('video-feed-tab').hidden = true;
+    document.getElementById('video-feed-nav-btn').hidden = true;
+  }
+
+  function initVideoFeed() {
+    var tab = document.getElementById('video-feed-tab');
+    var navBtn = document.getElementById('video-feed-nav-btn');
+    var closeBtn = document.getElementById('video-feed-close');
+    var overlay = document.getElementById('video-feed-overlay');
+
+    tab.addEventListener('click', openVideoFeed);
+    navBtn.addEventListener('click', openVideoFeed);
+    closeBtn.addEventListener('click', closeVideoFeed);
+    overlay.addEventListener('click', closeVideoFeed);
+
+    fetch('/videos.json')
+      .then(function (res) {
+        if (!res.ok) throw new Error('videos.json недоступен');
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data.newest || !data.newest.length) {
+          hideVideoFeedTriggers();
+          return;
+        }
+        document.getElementById('video-feed-newest').innerHTML = data.newest.map(videoCardHtml).join('');
+        document.getElementById('video-feed-popular').innerHTML = (data.popular || []).map(videoCardHtml).join('');
+      })
+      .catch(function () {
+        hideVideoFeedTriggers();
+      });
+  }
+
   var now = new Date();
   var entries = normalize(PLAYTESTS, now);
   renderNext(entries, now);
   renderList(entries);
+  initVideoFeed();
 })();
 </script>
 </body>
