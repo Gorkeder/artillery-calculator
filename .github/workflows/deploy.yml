@@ -40,3 +40,12 @@ jobs:
             --exclude '.claude' \
             -e "ssh -o StrictHostKeyChecking=no" \
             ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/anoma/"
+
+      - name: Restore video-feed cron write access
+        # rsync's chmod on the destination root recomputes its POSIX ACL
+        # mask on every deploy, which silently strips the cron user's write
+        # access to /var/www/anoma (see RELEASE.md, "Лента видео ютуберов").
+        # Re-apply it after every sync so the hourly cron never breaks.
+        run: |
+          ssh -o StrictHostKeyChecking=no "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "sudo setfacl -m u:${{ secrets.SSH_USER }}:rwx,mask::rwx /var/www/anoma"
