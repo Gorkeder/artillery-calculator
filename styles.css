@@ -396,15 +396,15 @@ footer p { margin: 6px 0; }
   align-items: center;
   gap: 8px;
   padding: 14px 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-left: none;
+  background: var(--accent);
+  border: none;
   border-radius: 0 10px 10px 0;
-  color: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
   cursor: pointer;
 }
 
-.video-feed-tab:hover { background: var(--panel-2); }
+.video-feed-tab:hover { background: #e6d46a; }
 
 .video-feed-tab .vft-label {
   writing-mode: vertical-rl;
@@ -554,17 +554,16 @@ footer p { margin: 6px 0; }
   justify-content: center;
   width: 34px;
   height: 34px;
-  border-radius: 6px;
+  border-radius: 999px;
   border: none;
-  background: none;
-  color: var(--muted);
+  background: var(--accent);
+  color: var(--bg);
   cursor: pointer;
   font-size: 15px;
 }
 
 .video-feed-nav-btn:hover {
-  color: var(--text);
-  background: var(--panel-2);
+  background: #e6d46a;
 }
 
 @media (max-width: 720px) {
