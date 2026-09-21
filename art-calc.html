@@ -3,15 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Калькулятор артиллерии</title>
+<title>Калькулятор артиллерии — ANOMA WIKI</title>
+<!-- Yandex.Metrika counter -->
+<script type="text/javascript">
+    (function(m,e,t,r,i,k,a){
+        m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+        m[i].l=1*new Date();
+        for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+        k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+    })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=112397124', 'ym');
+
+    ym(112397124, 'init', {ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", referrer: document.referrer, url: location.href, accurateTrackBounce:true, trackLinks:true});
+</script>
+<noscript><div><img src="https://mc.yandex.ru/watch/112397124" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+<!-- /Yandex.Metrika counter -->
 <style>
   :root {
-    --bg: #12140f;
-    --panel: #1c1f17;
-    --panel-border: #3a3f2c;
+    --bg: #121212;
+    --panel: #1b1b18;
+    --panel-border: #33322a;
     --text: #e9e6d8;
     --muted: #9a9a86;
-    --accent: #d8c46a;
+    --accent: #d4c24f;
     --good: #4caf50;
     --bad: #e05252;
     --gun: #4da3ff;
@@ -59,7 +72,7 @@
     padding: 7px 10px;
     border-radius: 6px;
     border: 1px solid var(--panel-border);
-    background: #23271b;
+    background: #1f1f1c;
     color: var(--text);
     font-size: 13px;
   }
@@ -67,7 +80,7 @@
     padding: 8px 14px;
     border-radius: 6px;
     border: 1px solid var(--panel-border);
-    background: #23271b;
+    background: #1f1f1c;
     color: var(--text);
     font-size: 13px;
     cursor: pointer;
@@ -78,7 +91,7 @@
   }
   .mode-btn.active {
     border-color: var(--accent);
-    background: #33301a;
+    background: #332f1d;
   }
   .dot {
     width: 10px;
@@ -166,7 +179,7 @@
     overflow-y: auto;
   }
   .card {
-    background: #23271b;
+    background: #1f1f1c;
     border: 1px solid var(--panel-border);
     border-radius: 8px;
     padding: 12px 14px;
@@ -228,7 +241,7 @@
     height: 28px;
     border-radius: 6px;
     border: 1px solid var(--panel-border);
-    background: #23271b;
+    background: #1f1f1c;
     color: var(--text);
     cursor: pointer;
     font-size: 15px;
@@ -237,7 +250,7 @@
     padding: 8px 14px;
     border-radius: 6px;
     border: 1px solid var(--panel-border);
-    background: #23271b;
+    background: #1f1f1c;
     color: var(--text);
     font-size: 13px;
     cursor: pointer;
@@ -255,7 +268,7 @@
     padding: 6px 8px;
     border-radius: 6px;
     border: 1px solid var(--panel-border);
-    background: #1c1f17;
+    background: #1b1b18;
     color: var(--text);
     font-size: 13px;
   }
@@ -263,7 +276,7 @@
     padding: 6px 12px;
     border-radius: 6px;
     border: 1px solid var(--panel-border);
-    background: #23271b;
+    background: #1f1f1c;
     color: var(--text);
     font-size: 13px;
     cursor: pointer;
@@ -281,7 +294,7 @@
     left: 8px;
     bottom: 8px;
     z-index: 5;
-    background: rgba(18, 20, 15, 0.85);
+    background: rgba(18,18,18, 0.85);
     border: 1px solid var(--panel-border);
     border-radius: 4px;
     padding: 3px 8px;
@@ -304,280 +317,46 @@
 </style>
 </head>
 <body>
-<style id="gate-style">
-  #release-gate {
-    position: fixed;
-    inset: 0;
-    z-index: 99999;
-    background: var(--bg, #12140f);
-    color: var(--text, #e9e6d8);
+<style id="wiki-notice-style">
+  #wiki-notice {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 24px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  }
-  #release-gate h1 {
-    font-size: clamp(20px, 4vw, 34px);
-    color: var(--accent, #d8c46a);
-    margin: 0 0 14px 0;
-    letter-spacing: 0.5px;
-  }
-  #release-gate .gate-sub {
-    font-size: clamp(13px, 2.4vw, 16px);
-    color: var(--muted, #9a9a86);
-    max-width: 460px;
-    line-height: 1.6;
-    margin: 0 0 26px 0;
-  }
-  #release-gate .gate-timer {
-    font-size: clamp(28px, 7vw, 52px);
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 2px;
-  }
-  #release-gate .gate-when {
-    margin-top: 12px;
-    font-size: 12px;
-    color: var(--muted, #9a9a86);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-  }
-  body.gated #app { display: none !important; }
-  #gate-key-form {
-    margin-top: 24px;
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    justify-content: center;
-    max-width: 460px;
-  }
-  #gate-key-input {
-    padding: 9px 12px;
-    border-radius: 6px;
-    border: 1px solid var(--panel-border, #3a3f2c);
-    background: #1c1f17;
-    color: var(--text, #e9e6d8);
+    gap: 12px;
+    padding: 7px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--panel-border);
     font-size: 13px;
-    width: 300px;
-    max-width: 70vw;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    letter-spacing: 0.5px;
+    line-height: 1.4;
   }
-  #gate-key-btn {
-    padding: 9px 18px;
-    border-radius: 6px;
-    border: 1px solid var(--accent, #d8c46a);
-    background: #33301a;
-    color: var(--text, #e9e6d8);
-    font-size: 13px;
-    cursor: pointer;
+  #wiki-notice a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
   }
-  #gate-key-btn:disabled { opacity: 0.55; cursor: default; }
-  #gate-key-hint {
-    flex-basis: 100%;
-    font-size: 11px;
-    color: var(--muted, #9a9a86);
-    margin-top: 4px;
-  }
-  #gate-key-msg {
-    flex-basis: 100%;
-    font-size: 12px;
-    margin-top: 6px;
-    min-height: 16px;
-  }
-  #gate-key-msg.err { color: var(--bad, #e05252); }
-  #gate-key-msg.ok { color: var(--good, #4caf50); }
+  #wiki-notice a:hover { text-decoration: underline; }
 </style>
-<div id="release-gate">
-  <h1>Калькулятор артиллерии</h1>
-  <p class="gate-sub" id="gate-sub">Карта ещё не вышла. Инструмент откроется, когда обновление появится в игре.</p>
-  <div class="gate-timer" id="gate-timer">--:--:--</div>
-  <div class="gate-when">Открытие: 6 сентября, 16:00 МСК</div>
-  <form id="gate-key-form" autocomplete="off">
-    <input id="gate-key-input" type="password" inputmode="latin" spellcheck="false"
-           autocapitalize="off" placeholder="Ключ раннего доступа" aria-label="Ключ раннего доступа">
-    <button type="submit" id="gate-key-btn">Войти</button>
-    <div id="gate-key-hint">Есть ключ раннего доступа? Введите его, чтобы открыть калькулятор до релиза.</div>
-    <div id="gate-key-msg" role="status"></div>
-  </form>
-</div>
+<script src="map.js"></script>
 <script>
 (function () {
-  // 6 сентября 2026, 16:00 МСК (UTC+3) => 13:00 UTC
-  var UNLOCK = Date.UTC(2026, 8, 6, 13, 0, 0);
-  var gate = document.getElementById('release-gate');
-  var timerEl = document.getElementById('gate-timer');
-  var subEl = document.getElementById('gate-sub');
-  var styleEl = document.getElementById('gate-style');
-  var iv = null;
-  var reqTimer = null;
-  var doneUnlock = false;
-  var pastSince = 0;
-
-  function timeReached() { return Date.now() >= UNLOCK; }
-  function hasMap() { return typeof window.__ARTY_MAP__ === 'string' && window.__ARTY_MAP__.length > 0; }
-
-  // Данные карты (map.js) физически не публикуются до релиза, поэтому
-  // вытащить её через dev tools раньше времени невозможно. Начинаем грузить
-  // только когда время пришло: до релиза файл отдаёт 404, после — подхватится.
-  function requestMap() {
-    if (hasMap() || reqTimer) return;
-    var s = document.createElement('script');
-    s.src = 'map.js?v=' + Math.floor(Date.now() / 15000);
-    s.onload = maybeUnlock;
-    s.onerror = function () { if (s.parentNode) s.parentNode.removeChild(s); };
-    document.head.appendChild(s);
-    reqTimer = setTimeout(function () { reqTimer = null; requestMap(); }, 15000);
-  }
-
-  function maybeUnlock() {
-    if (doneUnlock || !timeReached() || !hasMap()) return;
-    doneUnlock = true;
-    if (iv) clearInterval(iv);
-    if (reqTimer) clearTimeout(reqTimer);
+  // Карта (map.js) задаёт window.__ARTY_MAP__ = "data:image/...;base64,...".
+  // Подставляем её в <img id="map-img">, как только элемент существует.
+  function setMap() {
     var img = document.getElementById('map-img');
-    if (img) img.src = window.__ARTY_MAP__;
-    document.body.classList.remove('gated');
-    if (gate && gate.parentNode) gate.parentNode.removeChild(gate);
-    if (styleEl && styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
-  }
-
-  function pad(n) { return (n < 10 ? '0' : '') + n; }
-
-  function tick() {
-    if (doneUnlock) return;
-    var left = UNLOCK - Date.now();
-    if (left > 0) {
-      var s = Math.floor(left / 1000);
-      var d = Math.floor(s / 86400); s -= d * 86400;
-      var h = Math.floor(s / 3600); s -= h * 3600;
-      var m = Math.floor(s / 60); s -= m * 60;
-      timerEl.textContent = (d > 0 ? d + 'д ' : '') + pad(h) + ':' + pad(m) + ':' + pad(s);
-      return;
-    }
-    timerEl.textContent = '00:00:00';
-    requestMap();
-    if (hasMap()) { maybeUnlock(); return; }
-    // карта ещё не подтянулась — не пугаем сообщением первые 8 секунд
-    if (!pastSince) pastSince = Date.now();
-    if (Date.now() - pastSince > 8000) {
-      subEl.textContent = 'Публикуем карту, подождите минуту и обновите страницу…';
+    if (img && typeof window.__ARTY_MAP__ === 'string' && window.__ARTY_MAP__.length > 0) {
+      img.src = window.__ARTY_MAP__;
     }
   }
-
-  // --- Ранний доступ по ключу ---------------------------------------------
-  // map.enc уже лежит в репозитории (base64( iv(12) || authTag(16) || ct ),
-  // AES-256-GCM). Ключ раннего доступа — те же 64 hex-символа, что и MAP_KEY.
-  // Верный ключ расшифровывает карту прямо в браузере через WebCrypto и
-  // открывает калькулятор, не дожидаясь отсчёта. Неверный ключ не проходит
-  // проверку GCM — значит проверка ключа = проверка расшифровки, отдельного
-  // «пароля» хранить не нужно.
-  var keyForm = document.getElementById('gate-key-form');
-  var keyInput = document.getElementById('gate-key-input');
-  var keyBtn = document.getElementById('gate-key-btn');
-  var keyMsg = document.getElementById('gate-key-msg');
-  var earlyBusy = false;
-
-  function setKeyMsg(text, kind) {
-    if (!keyMsg) return;
-    keyMsg.textContent = text || '';
-    keyMsg.className = kind || '';
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setMap);
+  } else {
+    setMap();
   }
-
-  function hexToBytes(hex) {
-    var out = new Uint8Array(hex.length / 2);
-    for (var i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
-    return out;
-  }
-
-  function b64ToBytes(b64) {
-    var bin = atob(b64);
-    var out = new Uint8Array(bin.length);
-    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-    return out;
-  }
-
-  function earlyUnlock() {
-    if (doneUnlock || !hasMap()) return;
-    doneUnlock = true;
-    if (iv) clearInterval(iv);
-    if (reqTimer) clearTimeout(reqTimer);
-    var img = document.getElementById('map-img');
-    if (img) img.src = window.__ARTY_MAP__;
-    document.body.classList.remove('gated');
-    if (gate && gate.parentNode) gate.parentNode.removeChild(gate);
-    if (styleEl && styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
-  }
-
-  function tryEarlyAccess(rawKey) {
-    var keyHex = (rawKey || '').trim().replace(/\s+/g, '').toLowerCase();
-    if (!/^[0-9a-f]{64}$/.test(keyHex)) {
-      setKeyMsg('Ключ должен состоять ровно из 64 hex-символов.', 'err');
-      return;
-    }
-    if (!window.crypto || !crypto.subtle) {
-      setKeyMsg('Расшифровка в этом браузере недоступна (нужен https).', 'err');
-      return;
-    }
-    earlyBusy = true;
-    if (keyBtn) keyBtn.disabled = true;
-    if (keyInput) keyInput.disabled = true;
-    setKeyMsg('Проверяю ключ и расшифровываю карту…', '');
-
-    fetch('map.enc', { cache: 'no-store' })
-      .then(function (resp) {
-        if (!resp.ok) throw new Error('map.enc HTTP ' + resp.status);
-        return resp.text();
-      })
-      .then(function (text) {
-        var blob = b64ToBytes(text.trim());
-        var ivBytes = blob.subarray(0, 12);
-        var tag = blob.subarray(12, 28);
-        var ct = blob.subarray(28);
-        var data = new Uint8Array(ct.length + tag.length);
-        data.set(ct, 0);
-        data.set(tag, ct.length); // WebCrypto ждёт ciphertext || tag
-        return crypto.subtle.importKey('raw', hexToBytes(keyHex), 'AES-GCM', false, ['decrypt'])
-          .then(function (cryptoKey) {
-            return crypto.subtle.decrypt(
-              { name: 'AES-GCM', iv: ivBytes, tagLength: 128 }, cryptoKey, data
-            );
-          });
-      })
-      .then(function (plainBuf) {
-        var script = new TextDecoder().decode(plainBuf);
-        // map.js — одна строка: window.__ARTY_MAP__ = "data:image/...;base64,...";
-        var m = script.match(/"(data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+)"/);
-        if (!m) throw new Error('расшифровано, но карта не распознана');
-        window.__ARTY_MAP__ = m[1];
-        setKeyMsg('Ключ принят, открываю калькулятор…', 'ok');
-        earlyUnlock();
-      })
-      .catch(function () {
-        earlyBusy = false;
-        if (keyBtn) keyBtn.disabled = false;
-        if (keyInput) keyInput.disabled = false;
-        setKeyMsg('Неверный ключ или карта недоступна. Проверьте ключ и попробуйте снова.', 'err');
-      });
-  }
-
-  if (keyForm) {
-    keyForm.addEventListener('submit', function (e) {
-      e.preventDefault();
-      if (earlyBusy || doneUnlock) return;
-      tryEarlyAccess(keyInput ? keyInput.value : '');
-    });
-  }
-
-  document.body.classList.add('gated');
-  tick();
-  iv = setInterval(tick, 1000);
 })();
 </script>
 <div id="app">
+  <div id="wiki-notice">
+    <a href="/">&larr; Anoma Wiki</a>
+  </div>
   <header>
     <h1>Калькулятор артиллерии</h1>
     <div class="row">
@@ -1016,12 +795,12 @@
       var tickH = isMajor ? 18 : (isMedium ? 12 : 7);
       var y2 = H - 8;
       var y1 = y2 - tickH;
-      var tickColor = isMajor ? '#d8c46a' : (isMedium ? '#b9ae7a' : '#6f7a5c');
+      var tickColor = isMajor ? '#d4c24f' : (isMedium ? '#c9b96a' : '#8a8a7a');
       var tickWidth = isMajor ? 1.8 : (isMedium ? 1.3 : 1);
       parts.push('<line x1="' + x.toFixed(1) + '" y1="' + y1 + '" x2="' + x.toFixed(1) + '" y2="' + y2 + '" stroke="' + tickColor + '" stroke-width="' + tickWidth + '"/>');
       if (isMajor) {
         var label = COMPASS_LABELS[norm / 45];
-        parts.push('<text x="' + x.toFixed(1) + '" y="' + (y1 - 4) + '" text-anchor="middle" fill="#d8c46a" font-size="11" font-weight="700" font-family="Arial, sans-serif">' + label + '</text>');
+        parts.push('<text x="' + x.toFixed(1) + '" y="' + (y1 - 4) + '" text-anchor="middle" fill="#d4c24f" font-size="11" font-weight="700" font-family="Arial, sans-serif">' + label + '</text>');
       }
     }
     parts.push('<line x1="' + (W / 2) + '" y1="2" x2="' + (W / 2) + '" y2="' + (H - 2) + '" stroke="#ff4d4d" stroke-width="1.5" stroke-dasharray="3,2"/>');
