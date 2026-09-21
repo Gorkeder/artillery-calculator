@@ -553,3 +553,8 @@ footer p { margin: 6px 0; }
   .video-feed-tab { display: none; }
   .video-feed-nav-btn { display: inline-flex; }
 }
+
+.video-feed-tab[hidden],
+.video-feed-nav-btn[hidden] {
+  display: none;
+}
