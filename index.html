@@ -29,8 +29,36 @@
     <a href="#home">Главная</a>
     <a href="#playtests">Календарь плейтестов</a>
     <a class="cta" href="/art-calc">Калькулятор &rarr;</a>
+    <button type="button" class="video-feed-nav-btn" id="video-feed-nav-btn"
+      aria-expanded="false" aria-controls="video-feed-panel" aria-label="Видео ютуберов">
+      <span aria-hidden="true">&#9654;</span>
+    </button>
   </nav>
 </header>
+
+<button type="button" class="video-feed-tab" id="video-feed-tab"
+  aria-expanded="false" aria-controls="video-feed-panel">
+  <span class="vft-icon" aria-hidden="true">&#9654;</span>
+  <span class="vft-label">Видео</span>
+</button>
+
+<aside class="video-feed-panel" id="video-feed-panel">
+  <div class="vfp-head">
+    <span class="vfp-title">Видео ютуберов</span>
+    <button type="button" class="vfp-close" id="video-feed-close" aria-label="Закрыть">&#10005;</button>
+  </div>
+  <div class="vfp-body">
+    <section class="vfp-section">
+      <h3 class="vfp-h">Новинки</h3>
+      <ul class="vfp-list" id="video-feed-newest"></ul>
+    </section>
+    <section class="vfp-section">
+      <h3 class="vfp-h">Популярное</h3>
+      <ul class="vfp-list" id="video-feed-popular"></ul>
+    </section>
+  </div>
+</aside>
+<div class="video-feed-overlay" id="video-feed-overlay" hidden></div>
 
 <main>
   <section id="home" class="hero">
