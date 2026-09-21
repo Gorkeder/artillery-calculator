@@ -629,11 +629,11 @@ footer p { margin: 6px 0; }
 }
 
 .vf-card.vf-wave {
-  animation: vf-wave-flash 0.5s ease-out;
-  animation-delay: calc(var(--i, 0) * 70ms);
+  animation: vf-wave-flash 0.9s ease-out;
+  animation-delay: calc(var(--i, 0) * 140ms);
 }
 
 .vf-card.vf-wave-target {
-  animation: vf-wave-flash-gold 2.2s ease-out;
-  animation-delay: calc(var(--i, 0) * 70ms);
+  animation: vf-wave-flash-gold 3.6s ease-out;
+  animation-delay: calc(var(--i, 0) * 140ms);
 }
