@@ -62,3 +62,41 @@ node tools/encrypt-map.js      # map.js -> map.enc
 export MAP_KEY=<64 hex-символа>
 node tools/decrypt-map.js      # map.enc -> map.js
 ```
+
+## Лента видео ютуберов (`videos.json`)
+
+Панель с видео на главной читает статический `/var/www/anoma/videos.json`.
+Файл генерирует `tools/youtube-feed-fetcher.js` — этот скрипт **не входит**
+в обычный деплой (`tools/` исключена из `deploy.yml`), поэтому его нужно
+один раз вручную скопировать на VPS и повесить на cron.
+
+1. Скопировать на сервер (в любую рабочую папку, не обязательно в
+   `/var/www/anoma`):
+   ```
+   scp tools/youtube-feed-lib.js tools/youtube-feed-fetcher.js deploy@<host>:/opt/anoma-tools/
+   ```
+
+2. На сервере создать файл окружения (например `/opt/anoma-tools/.env`,
+   права `600`, не в git):
+   ```
+   YOUTUBE_API_KEY=<ключ из Google Cloud Console>
+   YOUTUBE_CHANNELS=UCxxxxxxxx:Имя канала 1,UCyyyyyyyy:Имя канала 2
+   OUTPUT_PATH=/var/www/anoma/videos.json
+   ```
+
+3. Проверить вручную:
+   ```
+   set -a; source /opt/anoma-tools/.env; set +a
+   node /opt/anoma-tools/youtube-feed-fetcher.js
+   cat /var/www/anoma/videos.json
+   ```
+
+4. Добавить в crontab пользователя, от которого можно писать в
+   `/var/www/anoma` (запуск раз в час):
+   ```
+   0 * * * * . /opt/anoma-tools/.env && /usr/bin/node /opt/anoma-tools/youtube-feed-fetcher.js >> /var/log/anoma-video-feed.log 2>&1
+   ```
+
+Обновить список каналов — отредактировать `YOUTUBE_CHANNELS` в
+`/opt/anoma-tools/.env` на сервере и один раз прогнать скрипт вручную
+(шаг 3), в репозиторий список каналов не попадает.
