@@ -41,6 +41,7 @@ function createApp(opts) {
     mailIp: createRateLimiter({ max: 10, windowMs: HOUR }),
     mailEmail: createRateLimiter({ max: 3, windowMs: HOUR }),
     marksWrite: createRateLimiter({ max: 120, windowMs: 10 * MIN }),
+    proposalsWrite: createRateLimiter({ max: 60, windowMs: 10 * MIN }),
     ...(opts.limiters || {}),
   };
   const routes = ROUTE_MODULES.flat().map((r) => ({ ...r, ...compile(r.pattern) }));

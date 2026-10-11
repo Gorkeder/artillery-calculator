@@ -6,6 +6,15 @@ const v = require('../validate');
 const repo = require('../repo');
 const { unlinkAll } = require('../files');
 
+const MAX_OPEN_PROPOSALS = 10;
+
+// Proposal writes of non-admins share one per-user limit.
+function limitProposalWrites(c) {
+  if (!c.limiters.proposalsWrite.allow('u:' + c.user.id, c.now())) {
+    throw new HttpError(429, 'too many requests, try again later');
+  }
+}
+
 function need(c, action, resource) {
   if (!c.user) throw new HttpError(401, 'login required');
   if (!can(c.user, action, resource)) throw new HttpError(403, 'forbidden');
@@ -159,36 +168,51 @@ module.exports = [
     method: 'POST',
     pattern: '/api/features',
     handler: async (c) => {
-      need(c, 'feature:create');
+      if (!c.user) throw new HttpError(401, 'login required');
+      const direct = can(c.user, 'feature:create');
+      if (!direct) {
+        if (!can(c.user, 'feature:propose')) throw new HttpError(403, 'proposals_blocked');
+        limitProposalWrites(c);
+      }
       const body = await readJson(c.req);
       const mapId = intField(body.map_id, 'map_id');
       const categoryId = intField(body.category_id, 'category_id');
-      mapOr404(c, mapId);
+      const map = mapOr404(c, mapId);
+      if (!direct && !map.published) throw new HttpError(404, 'map not found');
       const cat = repo.getCategory(c.db, categoryId);
       if (!cat || cat.map_id !== mapId) throw new HttpError(400, 'category does not belong to this map');
       const geometry = checked(v.validateGeometry(cat.shape, body.geometry));
       const fields = checked(v.validateFeature(body, { create: true }));
+      if (!direct) {
+        // Appearance is the admin's call; and the limit check + insert below run with no await in between.
+        delete fields.color;
+        delete fields.opacity;
+        if (repo.countOpenProposals(c.db, c.user.id) >= MAX_OPEN_PROPOSALS) throw new HttpError(409, 'proposals_limit');
+      }
       const id = repo.insertRow(c.db, 'features', {
         ...fields,
         map_id: mapId,
         category_id: categoryId,
         geometry: JSON.stringify(geometry),
         author_id: c.user.id,
-        status: 'approved',
+        status: direct ? 'approved' : 'pending',
         updated_by: c.user.id,
         updated_at: sqlTime(c.now()),
       });
-      return { status: 201, body: repo.getFeature(c.db, id) };
+      return { status: 201, body: repo.getFeature(c.db, id, c.user) };
     },
   },
   {
     method: 'PATCH',
     pattern: '/api/features/:id',
     handler: async (c) => {
+      if (!c.user) throw new HttpError(401, 'login required');
       const id = idParam(c);
       const row = repo.rawFeature(c.db, id);
-      if (!row) throw new HttpError(404, 'feature not found');
-      need(c, 'feature:update', row);
+      // A foreign, published or missing feature look the same to a non-admin.
+      if (!row || !can(c.user, 'feature:update', row)) throw new HttpError(404, 'feature not found');
+      const admin = c.user.role === 'admin';
+      if (!admin) limitProposalWrites(c);
       const body = await readJson(c.req);
       const categoryId = 'category_id' in body ? intField(body.category_id, 'category_id') : row.category_id;
       const cat = repo.getCategory(c.db, categoryId);
@@ -196,6 +220,10 @@ module.exports = [
       const geometryIn = 'geometry' in body ? body.geometry : JSON.parse(row.geometry);
       const geometry = checked(v.validateGeometry(cat.shape, geometryIn));
       const fields = checked(v.validateFeature(body));
+      if (!admin) {
+        delete fields.color;
+        delete fields.opacity;
+      }
       repo.updateRow(c.db, 'features', id, {
         ...fields,
         category_id: categoryId,
@@ -203,17 +231,18 @@ module.exports = [
         updated_by: c.user.id,
         updated_at: sqlTime(c.now()),
       });
-      return { body: repo.getFeature(c.db, id) };
+      return { body: repo.getFeature(c.db, id, c.user) };
     },
   },
   {
     method: 'DELETE',
     pattern: '/api/features/:id',
     handler: async (c) => {
+      if (!c.user) throw new HttpError(401, 'login required');
       const id = idParam(c);
       const row = repo.rawFeature(c.db, id);
-      if (!row) throw new HttpError(404, 'feature not found');
-      need(c, 'feature:delete', row);
+      if (!row || !can(c.user, 'feature:delete', row)) throw new HttpError(404, 'feature not found');
+      if (c.user.role !== 'admin') limitProposalWrites(c);
       const files = repo.imagePathsFor(c.db, 'feature', id);
       repo.deleteRow(c.db, 'features', id);
       unlinkAll(c.uploadsDir, files);

@@ -30,8 +30,12 @@ function categoryOut(r) {
   };
 }
 
-function featureOut(r, images) {
-  return {
+// author_id is only for admins; everyone else gets `mine` (are they the author) so the public
+// payload never carries user ids. A rejection reason is for the author and the admin.
+function featureOut(r, images, viewer) {
+  const admin = Boolean(viewer) && viewer.role === 'admin';
+  const mine = Boolean(viewer) && r.author_id !== null && r.author_id === viewer.id;
+  const out = {
     id: r.id,
     map_id: r.map_id,
     category_id: r.category_id,
@@ -41,9 +45,12 @@ function featureOut(r, images) {
     color: r.color,
     opacity: r.opacity,
     status: r.status,
-    author_id: r.author_id,
+    reject_reason: admin || mine ? r.reject_reason || null : null,
+    mine,
     images: images || [],
   };
+  if (admin) out.author_id = r.author_id;
+  return out;
 }
 
 function listMaps(db, { includeUnpublished = false } = {}) {
@@ -105,20 +112,27 @@ function listFeatures(db, mapId, viewer) {
       )
       .all(mapId),
   );
-  return rows.map((r) => featureOut(r, imgs.get(r.id)));
+  return rows.map((r) => featureOut(r, imgs.get(r.id), viewer));
 }
 
 function rawFeature(db, id) {
   return db.prepare('SELECT * FROM features WHERE id = ?').get(id) || null;
 }
 
-function getFeature(db, id) {
+function getFeature(db, id, viewer) {
   const r = rawFeature(db, id);
   if (!r) return null;
   const imgs = groupImages(
     db.prepare('SELECT id, feature_id, path FROM feature_images WHERE feature_id = ? ORDER BY sort, id').all(id),
   );
-  return featureOut(r, imgs.get(id));
+  return featureOut(r, imgs.get(id), viewer);
+}
+
+// Proposals that still wait for a decision (a rejected one no longer counts against the limit).
+function countOpenProposals(db, userId) {
+  return db
+    .prepare("SELECT COUNT(*) AS n FROM features WHERE author_id = ? AND status = 'pending' AND reject_reason IS NULL")
+    .get(userId).n;
 }
 
 function countFeaturesInCategory(db, id) {
@@ -224,4 +238,5 @@ module.exports = {
   getMark,
   getMarkRaw,
   countMarks,
+  countOpenProposals,
 };
