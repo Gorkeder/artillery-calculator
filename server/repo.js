@@ -232,6 +232,21 @@ function moderationOverview(db) {
     )
     .all()
     .map((r) => ({ ...r, geometry: JSON.parse(r.geometry) }));
+  // Rejected ones stay reachable so an admin can reverse a decision (or an automatic rejection after a block).
+  const rejected = db
+    .prepare(
+      `SELECT f.id, f.map_id, m.slug AS map_slug, m.title AS map_title, f.category_id, c.name AS category_name,
+              c.shape, f.title, f.description, f.author_id, u.login AS author_login, f.reject_reason, f.reviewed_at
+       FROM features f
+       JOIN maps m ON m.id = f.map_id
+       JOIN categories c ON c.id = f.category_id
+       LEFT JOIN users u ON u.id = f.author_id
+       WHERE f.status = 'pending' AND f.reject_reason IS NOT NULL
+       ORDER BY f.reviewed_at DESC, f.id DESC
+       LIMIT 100`,
+    )
+    .all()
+    .map((r) => ({ ...r }));
   const reports = db
     .prepare(
       `SELECT r.id, r.feature_id, f.title AS feature_title, m.slug AS map_slug, r.text, r.created_at,
@@ -252,7 +267,7 @@ function moderationOverview(db) {
     )
     .all()
     .map((r) => ({ ...r }));
-  return { proposals, reports, blocked };
+  return { proposals, rejected, reports, blocked };
 }
 
 module.exports = {

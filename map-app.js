@@ -190,7 +190,14 @@
 
   // A collapsed "Сообщить об ошибке" form for a published object (not for guests or blocked users).
   function reportBox(feature) {
-    if (feature.status !== 'approved' || !state.me.can.propose) return null;
+    if (feature.status !== 'approved') return null;
+    if (!state.me.user) {
+      return h('div', { class: 'report' }, h('a', {
+        class: 'hint',
+        href: '/account?next=' + encodeURIComponent(location.pathname + location.search),
+      }, 'Войдите, чтобы сообщить об ошибке'));
+    }
+    if (!state.me.can.propose) return null;
     var note = h('p', { class: 'hint' });
     var text = h('textarea', { rows: 3, maxLength: 500, placeholder: 'Что не так с этим объектом?' });
     var send = h('button', { type: 'button', class: 'primary' }, 'Отправить');

@@ -179,9 +179,9 @@
 
   function moderation() {
     var viewer = V();
-    var data = { proposals: [], reports: [], blocked: [] };
+    var data = { proposals: [], rejected: [], reports: [], blocked: [] };
     var tab = 'proposals';
-    var TITLES = { proposals: 'Предложения', reports: 'Жалобы', blocked: 'Заблокированные' };
+    var TITLES = { proposals: 'Предложения', rejected: 'Отклонённые', reports: 'Жалобы', blocked: 'Заблокированные' };
     var tabs = h('div', { class: 'row' });
     var list = h('div', { class: 'dlg-list' });
     var dlg;
@@ -239,6 +239,19 @@
           'Заблокировать автора') : null);
     }
 
+    // A rejected proposal can still be published: the admin may change their mind (e.g. after unblocking).
+    function rejectedRow(p) {
+      return h('div', { class: 'dlg-row mod-row' },
+        h('div', { class: 'mod-info' },
+          h('strong', null, p.title || 'Без названия'),
+          h('div', { class: 'hint' }, p.category_name + ' · ' + p.map_title + ' · ' + (p.author_login || 'аккаунт удалён')),
+          h('div', { class: 'mod-text' }, 'Отклонено: ' + (p.reject_reason || ''))),
+        h('button', { type: 'button', onclick: function () { showOnMap(p.map_slug, p.id); } }, 'Показать'),
+        h('button', { type: 'button', class: 'primary', onclick: function () {
+          act(function () { return api.post('/api/features/' + p.id + '/approve', {}); }, true);
+        } }, 'Одобрить'));
+    }
+
     function reportRow(r) {
       return h('div', { class: 'dlg-row mod-row' },
         h('div', { class: 'mod-info' },
@@ -268,7 +281,7 @@
           TITLES[k] + ' (' + data[k].length + ')'));
       });
       list.textContent = '';
-      var rowFor = { proposals: proposalRow, reports: reportRow, blocked: blockedRow }[tab];
+      var rowFor = { proposals: proposalRow, rejected: rejectedRow, reports: reportRow, blocked: blockedRow }[tab];
       data[tab].forEach(function (item) { list.appendChild(rowFor(item)); });
       if (!data[tab].length) list.appendChild(h('p', null, 'Пока пусто.'));
     }

@@ -413,3 +413,21 @@ test('cleanup deletes old rejected proposals without photos and keeps everything
   assert.deepEqual(titles, ['fresh rejected', 'open pending', 'old published', 'old rejected with photo']);
   db.close();
 });
+
+test('the queue also lists rejected proposals, so a decision (or an automatic block rejection) can be reversed', async (t) => {
+  const ctx = await setup(t);
+  const open = seedFeature(ctx, { status: 'pending', title: 'Open' });
+  const rejected = seedFeature(ctx, { status: 'pending', rejectReason: 'Автор заблокирован', title: 'Was rejected' });
+  seedFeature(ctx, { status: 'approved', title: 'Published' });
+  const r = await ctx.s.api('GET', '/api/moderation', { cookie: ctx.s.adminCookie });
+  assert.deepEqual(r.json.proposals.map((p) => p.id), [open]);
+  assert.deepEqual(r.json.rejected.map((p) => p.id), [rejected]);
+  assert.equal(r.json.rejected[0].reject_reason, 'Автор заблокирован');
+  assert.equal(r.json.rejected[0].author_login, 'alice');
+  assert.equal(r.json.rejected[0].map_slug, 'main');
+  // And approving from that list works end to end.
+  const ok = await post(ctx, `/api/features/${rejected}/approve`, ctx.s.adminCookie);
+  assert.equal(ok.status, 200);
+  const after = await ctx.s.api('GET', '/api/moderation', { cookie: ctx.s.adminCookie });
+  assert.deepEqual(after.json.rejected, []);
+});
