@@ -20,8 +20,23 @@ test('unknown action throws so typos cannot silently deny/allow', () => {
 });
 
 test('capabilities reflect can()', () => {
-  assert.deepEqual(capabilities(admin), { map: true, category: true, feature: true });
-  assert.deepEqual(capabilities(null), { map: false, category: false, feature: false });
+  assert.deepEqual(capabilities(admin), { map: true, category: true, feature: true, marks: true });
+  assert.deepEqual(capabilities(user), { map: false, category: false, feature: false, marks: true });
+  assert.deepEqual(capabilities(null), { map: false, category: false, feature: false, marks: false });
+});
+
+test('marks: any signed-in user creates, only the owner updates or deletes (admin included)', () => {
+  const mine = { id: 10, user_id: 2 };
+  assert.equal(can(user, 'mark:create'), true);
+  assert.equal(can(admin, 'mark:create'), true);
+  assert.equal(can(null, 'mark:create'), false);
+  for (const action of ['mark:update', 'mark:delete']) {
+    assert.equal(can(user, action, mine), true, action + ' owner');
+    assert.equal(can(admin, action, mine), false, action + ' admin is not the owner');
+    assert.equal(can({ id: 3, login: 'x', role: 'user' }, action, mine), false, action + ' stranger');
+    assert.equal(can(null, action, mine), false, action + ' guest');
+    assert.equal(can(user, action), false, action + ' without a resource');
+  }
 });
 
 test('featureFilter: admin sees all, user sees approved + own, anonymous only approved', () => {

@@ -7,15 +7,22 @@ const ACTIONS = new Set([
   'feature:update',
   'feature:delete',
   'image:write',
+  'mark:create',
+  'mark:update',
+  'mark:delete',
 ]);
 
-// The only place that decides who may do what. v1: admins only.
+// The only place that decides who may do what. Shared content: admins only.
 // Later: let role 'user' create features (status 'pending') and update/delete their own
 // pending ones by inspecting `resource` (a feature row with author_id/status).
 function can(user, action, resource) {
-  void resource;
   if (!ACTIONS.has(action)) throw new Error('unknown action: ' + action);
   if (!user) return false;
+  // Personal marks: any signed-in user (admin too) creates; only the owner changes or deletes.
+  if (action === 'mark:create') return true;
+  if (action === 'mark:update' || action === 'mark:delete') {
+    return Boolean(resource) && resource.user_id === user.id;
+  }
   return user.role === 'admin';
 }
 
@@ -24,6 +31,7 @@ function capabilities(user) {
     map: can(user, 'map:write'),
     category: can(user, 'category:write'),
     feature: can(user, 'feature:create'),
+    marks: can(user, 'mark:create'),
   };
 }
 

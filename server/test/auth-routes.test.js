@@ -10,7 +10,7 @@ test('GET /api/me is anonymous without a cookie', async (t) => {
   t.after(() => s.cleanup());
   const r = await s.api('GET', '/api/me');
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json, { user: null, can: { map: false, category: false, feature: false } });
+  assert.deepEqual(r.json, { user: null, can: { map: false, category: false, feature: false, marks: false } });
 });
 
 test('login sets a hardened session cookie and /me reports admin capabilities', async (t) => {
@@ -24,7 +24,7 @@ test('login sets a hardened session cookie and /me reports admin capabilities', 
   const cookie = setCookie.split(';')[0];
   const me = await s.api('GET', '/api/me', { cookie });
   assert.equal(me.json.user.login, 'admin');
-  assert.deepEqual(me.json.can, { map: true, category: true, feature: true });
+  assert.deepEqual(me.json.can, { map: true, category: true, feature: true, marks: true });
 });
 
 test('wrong password and unknown login both give 401 with the same message', async (t) => {
@@ -90,7 +90,7 @@ test('a normal user can log in but has no write capabilities', async (t) => {
   createUser(s.db, { login: 'visitor', password: 'visitor-pass', role: 'user' });
   const r = await s.api('POST', '/api/login', { body: { login: 'visitor', password: 'visitor-pass' } });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json.can, { map: false, category: false, feature: false });
+  assert.deepEqual(r.json.can, { map: false, category: false, feature: false, marks: true });
 });
 
 test('login accepts the email instead of the login, ignoring case and spaces', async (t) => {
