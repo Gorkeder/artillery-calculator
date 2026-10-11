@@ -172,7 +172,7 @@ test('smtp mailer copes with replies split across TCP chunks (mid-line and betwe
 
 // Scripted server for AUTH negotiation. `ehlo` is the list of reply lines (without codes);
 // `plain`/`login` are the final status codes for the credentials; `chunked` splits writes.
-function authFakeSmtp({ ehlo, plain = 235, login = 235, chunked = false }) {
+function authFakeSmtp({ ehlo, plain = 235, login = 235, loginStart = 334, chunked = false }) {
   const state = { commands: [], user: null, pass: null, auth: null, delivered: 0 };
   const pause = () => new Promise((r) => setTimeout(r, 10));
   const server = net.createServer((sock) => {
@@ -223,7 +223,9 @@ function authFakeSmtp({ ehlo, plain = 235, login = 235, chunked = false }) {
         } else if (/^AUTH PLAIN /.test(line)) {
           state.auth = line.slice('AUTH PLAIN '.length);
           say(plain === 235 ? '235 ok' : plain + ' nope');
-        } else if (line === 'AUTH LOGIN') { loginStep = 1; say('334 VXNlcm5hbWU6'); }
+        } else if (line === 'AUTH LOGIN') {
+          if (loginStart === 334) { loginStep = 1; say('334 VXNlcm5hbWU6'); } else say(loginStart + ' nope');
+        }
         else if (/^MAIL FROM:/.test(line)) say('250 ok');
         else if (/^RCPT TO:/.test(line)) say('250 ok');
         else if (line === 'DATA') { inData = true; say('354 go'); }
@@ -305,9 +307,47 @@ test('auth: error text never leaks credentials or server text', async (t) => {
   const f = await authFakeSmtp({ ehlo: ['fake', 'AUTH LOGIN'], login: 535 });
   t.after(() => f.server.close());
   await assert.rejects(() => mailerFor(f.port).send(MSG), (err) => {
-    assert.equal(err.message, 'smtp: unexpected reply 535');
+    assert.equal(err.message, 'smtp: unexpected reply 535 after AUTH LOGIN');
     return true;
   });
+});
+
+test('auth: 504 to PLAIN falls back to LOGIN even when EHLO advertised PLAIN', async (t) => {
+  const f = await authFakeSmtp({ ehlo: ['fake', 'AUTH PLAIN LOGIN'], plain: 504 });
+  t.after(() => f.server.close());
+  await mailerFor(f.port).send(MSG);
+  assert.equal(f.state.commands.filter((c) => c === 'AUTH PLAIN').length, 1);
+  assert.equal(f.state.user, 'noreply@anoma-wiki.ru');
+  assert.equal(f.state.pass, 'p@ss');
+  assert.equal(f.state.delivered, 1);
+});
+
+test('auth: 504 to both PLAIN and LOGIN rejects with the 504, no third attempt', async (t) => {
+  const f = await authFakeSmtp({ ehlo: ['fake', 'AUTH PLAIN LOGIN'], plain: 504, loginStart: 504 });
+  t.after(() => f.server.close());
+  await assert.rejects(() => mailerFor(f.port).send(MSG), (err) => {
+    assert.equal(err.message, 'smtp: unexpected reply 504 after AUTH LOGIN');
+    return true;
+  });
+  assert.equal(f.state.commands.filter((c) => c === 'AUTH PLAIN').length, 1);
+  assert.equal(f.state.commands.filter((c) => c === 'AUTH LOGIN').length, 1);
+  assert.equal(f.state.delivered, 0);
+});
+
+test('auth: 535 to PLAIN (PLAIN advertised) rejects and LOGIN is never attempted', async (t) => {
+  const f = await authFakeSmtp({ ehlo: ['fake', 'AUTH PLAIN LOGIN'], plain: 535 });
+  t.after(() => f.server.close());
+  await assert.rejects(() => mailerFor(f.port).send(MSG), (err) => {
+    assert.equal(err.message, 'smtp: unexpected reply 535 after AUTH PLAIN');
+    return true;
+  });
+  assert.ok(!f.state.commands.includes('AUTH LOGIN'));
+});
+
+test('errors name the command the reply followed, never server text or secrets', async (t) => {
+  const f = await authFakeSmtp({ ehlo: ['fake', 'AUTH PLAIN'], plain: 504, loginStart: 504 });
+  t.after(() => f.server.close());
+  await assert.rejects(() => mailerFor(f.port).send(MSG), /^Error: smtp: unexpected reply 504 after AUTH (PLAIN|LOGIN)$/);
 });
 
 test('auth: multi-line EHLO split across chunks works with a LOGIN-only server', async (t) => {

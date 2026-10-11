@@ -94,52 +94,53 @@ function smtpSend({ user, pass, helo, connect, timeoutMs }, { from, to, data }) 
 
     const read = () => new Promise((res) => { waiter = res; deliver(); });
     const say = (line) => socket.write(line + '\r\n');
-    const expect = async (codes) => {
+    // Errors carry only the numeric reply code and the NAME of the command it followed:
+    // never server text, credentials, addresses or message data.
+    const unexpected = (r, what) => new Error('smtp: unexpected reply ' + r.code + ' after ' + what);
+    const expect = async (codes, what) => {
       const r = await read();
-      if (!codes.includes(r.code)) throw new Error('smtp: unexpected reply ' + r.code);
+      if (!codes.includes(r.code)) throw unexpected(r, what);
       return r;
     };
-
-    // Errors carry only the reply code: never server text, credentials or message data.
     const authPlain = () => {
       say('AUTH PLAIN ' + Buffer.from(`\0${user}\0${pass}`, 'utf8').toString('base64'));
       return read();
     };
     const authLogin = async () => {
       say('AUTH LOGIN');
-      await expect([334]);
+      await expect([334], 'AUTH LOGIN');
       say(Buffer.from(String(user), 'utf8').toString('base64'));
-      await expect([334]);
+      await expect([334], 'AUTH LOGIN');
       say(Buffer.from(String(pass), 'utf8').toString('base64'));
-      await expect([235]);
+      await expect([235], 'AUTH LOGIN');
     };
 
     (async () => {
       try {
-        await expect([220]);
+        await expect([220], 'connect');
         say('EHLO ' + helo);
-        const ehlo = await expect([250]);
+        const ehlo = await expect([250], 'EHLO');
         const mechs = authMechanisms(ehlo.lines);
         if (mechs.has('LOGIN') && !mechs.has('PLAIN')) {
           await authLogin();
         } else {
-          // PLAIN advertised, or nothing advertised: try PLAIN first. Without an advertisement,
+          // Try PLAIN first. Whatever EHLO advertised (servers may advertise it and still refuse),
           // a refusal of the mechanism (5xx other than 535) falls back to LOGIN on this connection;
           // 535 means bad credentials and is final.
           const r = await authPlain();
-          const noAdvert = mechs.size === 0;
-          if (r.code !== 235 && noAdvert && r.code >= 500 && r.code <= 599 && r.code !== 535) await authLogin();
-          else if (r.code !== 235) throw new Error('smtp: unexpected reply ' + r.code);
+          if (r.code === 235) { /* authenticated */ }
+          else if (r.code >= 500 && r.code <= 599 && r.code !== 535) await authLogin();
+          else throw unexpected(r, 'AUTH PLAIN');
         }
         say(`MAIL FROM:<${from}>`);
-        await expect([250]);
+        await expect([250], 'MAIL FROM');
         say(`RCPT TO:<${to}>`);
-        await expect([250, 251]);
+        await expect([250, 251], 'RCPT TO');
         say('DATA');
-        await expect([354]);
+        await expect([354], 'DATA');
         const stuffed = data.replace(/^\./gm, '..');
         socket.write(stuffed + (stuffed.endsWith('\r\n') ? '' : '\r\n') + '.\r\n');
-        await expect([250]);
+        await expect([250], 'message body');
         say('QUIT');
         finish();
       } catch (err) {
