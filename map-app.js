@@ -17,8 +17,12 @@
     groups: {},
     layers: {},
     openId: null,
+    openMark: null,
+    mode: 'shared',
+    wantedMark: null,
   };
   var hooks = { onLayer: null, afterCategories: null, afterLoad: null };
+  var listeners = { mapLoaded: [] };
   var leaflet = null;
   var overlay = null;
   var clickHandler = defaultClick;
@@ -181,15 +185,31 @@
     var q = new URLSearchParams();
     if (state.map) q.set('m', state.map.slug);
     if (state.openId !== null && state.openId !== undefined) q.set('f', String(state.openId));
+    if (state.openMark !== null) q.set('mark', String(state.openMark));
     var s = q.toString();
     history.replaceState(null, '', location.pathname + (s ? '?' + s : ''));
   }
 
   function closeCard(silent) {
     state.openId = null;
+    state.openMark = null;
     if (leaflet) leaflet.closePopup();
     $('sheet').hidden = true;
     if (!silent) updateUrl();
+  }
+
+  // Shows any card node: a popup on desktop, a bottom sheet on a narrow screen.
+  function showCard(node, at, yOffset) {
+    if (narrow.matches) {
+      var sheet = $('sheet');
+      sheet.textContent = '';
+      sheet.appendChild(h('button', { class: 'card-x', type: 'button', 'aria-label': 'Закрыть', onclick: function () { closeCard(); } }, '×'));
+      sheet.appendChild(node);
+      sheet.hidden = false;
+    } else {
+      L.popup({ className: 'card-popup', minWidth: 260, maxWidth: 320, offset: [0, yOffset || 0], autoPanPadding: [40, 40] })
+        .setLatLng(at).setContent(node).openOn(leaflet);
+    }
   }
 
   function openFeature(id, latlng) {
@@ -198,19 +218,9 @@
     if (!f || !layer) return;
     closeCard(true);
     state.openId = id;
-    var node = cardNode(f);
-    if (narrow.matches) {
-      var sheet = $('sheet');
-      sheet.textContent = '';
-      sheet.appendChild(h('button', { class: 'card-x', type: 'button', 'aria-label': 'Закрыть', onclick: function () { closeCard(); } }, '×'));
-      sheet.appendChild(node);
-      sheet.hidden = false;
-    } else {
-      var isPoint = !!layer.getLatLng;
-      var at = isPoint ? layer.getLatLng() : (latlng || layer.getBounds().getCenter());
-      L.popup({ className: 'card-popup', minWidth: 260, maxWidth: 320, offset: isPoint ? [0, -14] : [0, 0], autoPanPadding: [40, 40] })
-        .setLatLng(at).setContent(node).openOn(leaflet);
-    }
+    var isPoint = !!layer.getLatLng;
+    var at = isPoint ? layer.getLatLng() : (latlng || layer.getBounds().getCenter());
+    showCard(cardNode(f), at, isPoint ? -14 : 0);
     updateUrl();
   }
 
@@ -301,6 +311,9 @@
       fillMapSelect();
       updateUrl();
       if (hooks.afterLoad) hooks.afterLoad();
+      listeners.mapLoaded.forEach(function (fn) {
+        try { fn(); } catch (e) { /* a listener must not break map loading */ }
+      });
     });
   }
 
@@ -320,8 +333,10 @@
     return loadScript(src).catch(function () { /* added in a later task; tolerated */ });
   }
 
+  // The editor scripts (and Geoman) are for desktop users who can draw something:
+  // shared objects (admin) and/or personal marks (any signed-in user).
   function wantsEditor() {
-    return !!state.me.can.feature && window.matchMedia('(min-width: 900px)').matches;
+    return !!(state.me.can.feature || state.me.can.marks) && window.matchMedia('(min-width: 900px)').matches;
   }
 
   // Geoman patches L.Map/L.Layer through init hooks, so it must be loaded BEFORE the map is created.
@@ -331,6 +346,20 @@
     return loadScript('/map-editor.js')
       .then(function () { return optionalScript('/map-editor-dialogs.js'); })
       .then(function () { window.MapEditor.start(window.MapViewer); });
+  }
+
+  // Personal marks: the viewer part always loads for a signed-in user, the drawing part
+  // only where Geoman is available (desktop).
+  function startMarks() {
+    var editable = geomanLoaded && wantsEditor();
+    return loadScript('/map-marks.js')
+      .then(function () {
+        window.MapMarks.start(window.MapViewer);
+        if (!editable) return null;
+        return loadScript('/map-marks-editor.js').then(function () {
+          window.MapMarksEditor.start(window.MapViewer, window.MapMarks);
+        });
+      });
   }
 
   function setupAuth() {
@@ -344,6 +373,10 @@
         ? '/account'
         : '/account?next=' + encodeURIComponent(location.pathname + location.search);
     });
+    if (!user) {
+      $('marks-slot').appendChild(h('p', { class: 'hint' }, 'Войдите, чтобы ставить свои метки. ',
+        h('a', { href: '/account?next=' + encodeURIComponent(location.pathname + location.search) }, 'Войти')));
+    }
   }
 
   // ---------- init ----------
@@ -354,7 +387,11 @@
       attributionControl: false, zoomControl: true,
     });
     leaflet.on('popupclose', function () {
-      if (state.openId !== null) { state.openId = null; updateUrl(); }
+      if (state.openId !== null || state.openMark !== null) {
+        state.openId = null;
+        state.openMark = null;
+        updateUrl();
+      }
     });
   }
 
@@ -377,6 +414,7 @@
       .then(function () {
         var q = new URLSearchParams(location.search);
         var wanted = q.get('m');
+        state.wantedMark = Number(q.get('mark')) || null;
         var slug = state.maps.some(function (m) { return m.slug === wanted; }) ? wanted : (state.maps[0] && state.maps[0].slug);
         if (!slug) {
           notice(state.me.can.map ? 'Карт пока нет. Нажмите «Карты» и добавьте первую.' : 'Карт пока нет.');
@@ -389,10 +427,14 @@
       })
       .catch(function () { notice('Не удалось загрузить карту. Обновите страницу.'); })
       .then(function () {
-        if (geomanLoaded && wantsEditor()) {
+        if (geomanLoaded && wantsEditor() && state.me.can.feature) {
           return startEditor().catch(function () { notice('Не удалось загрузить редактор.'); });
         }
         return null;
+      })
+      .then(function () {
+        if (!state.me.can.marks) return null;
+        return startMarks().catch(function () { notice('Не удалось загрузить личные метки.'); });
       });
   }
 
@@ -416,6 +458,13 @@
     focusFeature: focusFeature,
     notice: notice,
     setClickHandler: function (fn) { clickHandler = fn || defaultClick; },
+    showCard: showCard,
+    updateUrl: updateUrl,
+    svgIcon: svgIcon,
+    defaultClick: defaultClick,
+    mode: function () { return state.mode; },
+    setMode: function (m) { state.mode = m; },
+    onMapLoaded: function (fn) { listeners.mapLoaded.push(fn); },
   };
 
   init();
