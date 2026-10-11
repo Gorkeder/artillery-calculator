@@ -25,25 +25,31 @@ for them.
   - несколько карт, категории (название/цвет/иконка/тип), объекты: точки, полигоны, линии;
   - у объекта свой цвет, описание и до 10 фото; клик открывает карточку; поиск, фильтры, ссылки на объект;
   - редактор только для админа и только на ПК (рисование, правка вершин, менеджеры категорий и карт);
-  - API `server/` (Node, SQLite, вход по паролю, сессии, лимиты), 149 автотестов;
+  - API `server/` (Node, SQLite, вход по паролю, сессии, лимиты), 175 автотестов;
   - уже развёрнуто на VPS: сервис `anoma-api`, nginx, бэкап БД и загрузок, первая карта `main`, админ `admin`.
 - Подробности и обоснования: `docs/superpowers/specs/2026-10-11-interactive-map-editor-design.md` (спек),
   `docs/superpowers/plans/2026-10-11-interactive-map-editor.md` (план), эксплуатация — `RELEASE.md`.
-- **Аккаунты обычных пользователей (этап A)** (ветка `user-accounts`, код готов, на прод не выкачено):
+- **Аккаунты обычных пользователей (этап A)** (ветка `user-accounts` влита в `master`, работает на проде):
   регистрация, подтверждение почты, вход по логину или почте, сброс и смена пароля, список сессий,
   страница `/account`, черновик `/privacy`, кнопка входа на главной и на карте, команда `cli.js set-password`;
   спек и план — `docs/superpowers/specs|plans/2026-10-11-user-accounts*`, эксплуатация — `RELEASE.md`.
+- **Почта аккаунтов на проде** (2026-10-11): локальный Postfix только на отправку + OpenDKIM на VPS, приложение
+  в режиме relay (`127.0.0.1:25`, без AUTH); SPF, DKIM, DMARC в DNS у Beget, PTR в Virtualizor. Проверено:
+  `dkim/spf/dmarc=pass`. SMTP Beget оставлен как запасной вариант (`/etc/anoma/api.env.beget.bak`). Gmail пока
+  кладёт первые письма в «Спам» (у нового IP нет репутации). См. `RELEASE.md`.
 
 ### Не сделано / ждёт решения
-- Ветки `map-editor-spec` и `user-accounts` **ещё не влиты в `master`** (на проде API и статика карты уже работают;
-  после merge деплой синхронизирует всё остальное, включая аккаунты). Решить: merge локально или PR.
-- Настроить почту на проде (ящик `noreply@anoma-wiki.ru` у Beget, `/etc/anoma/api.env`, DKIM в панели Beget),
-  обновить юнит и nginx на VPS — см. `RELEASE.md` → «Аккаунты пользователей и почта». Пока почта не настроена,
-  регистрация отвечает 503.
+- Ветки `map-editor-spec` и `user-accounts` уже влиты в `master` (`git branch --merged`); влить ветку
+  `docs/postfix-mail` (merge локально или PR).
+- Следить за репутацией почты (Gmail, Mail.ru, Яндекс): пометки «Не спам», DMARC-отчёты на адрес из `rua`,
+  позже можно ужесточить `p=none`.
+- Ротировать API-ключ Virtualizor, выданный ассистенту (прав на управление питанием у него нет).
+- Проверить правило ufw `8899/tcp` (назначение не выяснено, владельцу).
 - Пароль админа лежит в `C:\Users\Николай\anoma-admin-password.txt` — перенести в менеджер паролей и удалить файл.
   Сменить пароль: `cli.js set-password <login>` (см. `RELEASE.md`).
-- Перед анонсом аккаунтов руками пройти браузерные сценарии (регистрация, письмо, `/account` на 375 px, возврат
-  на `/map`) и показать `/privacy` юристу.
+- Перед анонсом аккаунтов руками пройти страницы на телефоне и ПК (регистрация, письмо, `/account` на 375 px,
+  возврат на `/map`) и показать `/privacy` владельцу/юристу.
+- Решить до этапа C, входить ли автоматически после подтверждения почты (захват чужой почты, см. `RELEASE.md`).
 - Этап C: личные метки; этап B: предложения точек с модерацией; смена почты, самоудаление аккаунта, соцсети, 2FA.
 - Не вошло в v1 карты: отмена/повтор (Ctrl+Z), история изменений, импорт/экспорт, свои иконки, видео, массовое выделение.
 - Баннер cookie (152-ФЗ) не сделан.
@@ -70,7 +76,7 @@ for them.
   `map-app.js` (viewer), `map-editor.js` + `map-editor-dialogs.js` (editor), styles in `map-app.css`.
   Leaflet and Leaflet-Geoman are vendored in `vendor/` (no CDN). Geoman must load before `L.map()`.
 - `server/` — Node 22+ API (`node:http` + `node:sqlite`, no npm deps) for maps, categories, features,
-  photos, admin login and user accounts (`mailer.js` — SMTP/log/memory mail, `tokens.js` — one-time
+  photos, admin login and user accounts (`mailer.js` — own SMTP client (TLS + AUTH, or local relay mode on loopback)/log/memory mail, `tokens.js` — one-time
   verify/reset tokens, `routes/account.js` — registration, verification, reset, sessions). Deployed separately to `/opt/anoma-api`; **never published** by the static
   rsync. Data lives in `/var/lib/anoma/` on the VPS. See `RELEASE.md` ("Карта-редактор").
   All write permissions go through `server/permissions.js` `can()`; coordinates are stored as 0..1
