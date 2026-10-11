@@ -72,3 +72,30 @@ test('rate limiter blocks after max hits inside the window and recovers', () => 
   assert.equal(rl.allow('other', 20), true);
   assert.equal(rl.allow('ip', 1500), true);
 });
+
+test('createUser stores a lower-cased email and marks it verified unless told otherwise', () => {
+  const db = openDb(':memory:');
+  const id1 = a.createUser(db, { login: 'mail1', password: 'password-1', role: 'user', email: 'Mail1@Example.COM' });
+  const id2 = a.createUser(db, { login: 'mail2', password: 'password-2', role: 'user', email: 'mail2@example.com', emailVerified: false });
+  const r1 = db.prepare('SELECT email, email_verified_at FROM users WHERE id = ?').get(id1);
+  const r2 = db.prepare('SELECT email_verified_at FROM users WHERE id = ?').get(id2);
+  assert.equal(r1.email, 'mail1@example.com');
+  assert.ok(r1.email_verified_at);
+  assert.equal(r2.email_verified_at, null);
+});
+
+test('createSession records meta; touchSession updates last_seen_at at most every 10 minutes', () => {
+  const db = openDb(':memory:');
+  const uid = a.createUser(db, { login: 'sess', password: 'password-1', role: 'user' });
+  const token = a.createSession(db, uid, 1_000, undefined, { ip: '1.2.3.4', userAgent: 'UA/1' });
+  const row = () => db.prepare('SELECT created_at, last_seen_at, ip, user_agent FROM sessions').get();
+  assert.equal(row().created_at, 1_000);
+  assert.equal(row().ip, '1.2.3.4');
+  assert.equal(row().user_agent, 'UA/1');
+  a.touchSession(db, token, 1_000 + 5 * 60 * 1000);
+  assert.equal(row().last_seen_at, 1_000);
+  a.touchSession(db, token, 1_000 + 11 * 60 * 1000);
+  assert.equal(row().last_seen_at, 1_000 + 11 * 60 * 1000);
+  assert.equal(a.sessionId(token).length, 16);
+  assert.equal(a.sessionId(token), a.sha256(token).slice(0, 16));
+});

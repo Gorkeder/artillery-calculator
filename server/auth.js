@@ -25,26 +25,52 @@ function verifyPassword(password, stored) {
   return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }
 
-function createUser(db, { login, password, role }) {
+function createUser(db, { login, password, role, email = null, emailVerified = true }) {
   if (typeof login !== 'string' || !LOGIN_RE.test(login)) throw new Error('login must match [A-Za-z0-9_.-]{3,32}');
   if (typeof password !== 'string' || password.length < 8) throw new Error('password must be at least 8 characters');
   if (role !== 'admin' && role !== 'user') throw new Error('role must be admin or user');
   const r = db
-    .prepare('INSERT INTO users (login, password_hash, role) VALUES (?, ?, ?)')
-    .run(login, hashPassword(password), role);
+    .prepare(
+      `INSERT INTO users (login, password_hash, role, email, email_verified_at, password_changed_at)
+       VALUES (?, ?, ?, ?, CASE WHEN ? THEN datetime('now') END, datetime('now'))`,
+    )
+    .run(login, hashPassword(password), role, email === null ? null : String(email).toLowerCase(), emailVerified ? 1 : 0);
   return Number(r.lastInsertRowid);
 }
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-function createSession(db, userId, nowMs, ttlMs = SESSION_TTL_MS) {
+function createSession(db, userId, nowMs, ttlMs = SESSION_TTL_MS, meta = {}) {
   const token = crypto.randomBytes(32).toString('hex');
-  db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').run(
+  db.prepare(
+    'INSERT INTO sessions (token_hash, user_id, expires_at, created_at, last_seen_at, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  ).run(
     sha256(token),
     userId,
     nowMs + ttlMs,
+    nowMs,
+    nowMs,
+    meta.ip ? String(meta.ip).slice(0, 64) : null,
+    meta.userAgent ? String(meta.userAgent).slice(0, 200) : null,
   );
   return token;
+}
+
+const TOUCH_INTERVAL_MS = 10 * 60 * 1000;
+
+// Cheap "last seen": at most one write per session per 10 minutes.
+function touchSession(db, token, nowMs) {
+  if (!token || typeof token !== 'string') return;
+  db.prepare('UPDATE sessions SET last_seen_at = ? WHERE token_hash = ? AND last_seen_at < ?').run(
+    nowMs,
+    sha256(token),
+    nowMs - TOUCH_INTERVAL_MS,
+  );
+}
+
+// Public, non-secret handle of a session: the first 16 hex chars of its stored hash.
+function sessionId(token) {
+  return sha256(String(token)).slice(0, 16);
 }
 
 function destroySession(db, token) {
@@ -112,6 +138,10 @@ module.exports = {
   verifyPassword,
   createUser,
   createSession,
+  touchSession,
+  sessionId,
+  sha256,
+  LOGIN_RE,
   getSessionUser,
   destroySession,
   parseCookies,
