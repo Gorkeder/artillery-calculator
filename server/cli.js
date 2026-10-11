@@ -4,13 +4,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { loadConfig } = require('./config');
 const { openDb } = require('./db');
-const { createUser } = require('./auth');
+const { createUser, setPassword } = require('./auth');
 const { seedMap } = require('./seed');
 
 function usage() {
   console.error(
     'Usage:\n' +
       '  ANOMA_PASSWORD=<password> node server/cli.js create-admin <login>\n' +
+      '  ANOMA_PASSWORD=<password> node server/cli.js set-password <login>\n' +
       '  node server/cli.js seed-map <slug> <title> <path-to-map.js>',
   );
   process.exit(2);
@@ -29,6 +30,12 @@ function main() {
     if (!login || !password) usage();
     const id = createUser(db, { login, password, role: 'admin' });
     console.log(`admin "${login}" created (id ${id})`);
+  } else if (cmd === 'set-password') {
+    const [login] = args;
+    const password = process.env.ANOMA_PASSWORD;
+    if (!login || !password) usage();
+    setPassword(db, login, password);
+    console.log(`password for "${login}" changed, sessions closed`);
   } else if (cmd === 'seed-map') {
     const [slug, title, file] = args;
     if (!slug || !title || !file) usage();

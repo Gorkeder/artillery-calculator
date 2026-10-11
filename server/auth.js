@@ -38,6 +38,17 @@ function createUser(db, { login, password, role, email = null, emailVerified = t
   return Number(r.lastInsertRowid);
 }
 
+function setPassword(db, login, password) {
+  if (typeof password !== 'string' || password.length < 8) throw new Error('password must be at least 8 characters');
+  const row = db.prepare('SELECT id FROM users WHERE lower(login) = lower(?)').get(String(login));
+  if (!row) throw new Error('user not found: ' + login);
+  db.prepare("UPDATE users SET password_hash = ?, password_changed_at = datetime('now') WHERE id = ?").run(
+    hashPassword(password),
+    row.id,
+  );
+  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(row.id);
+}
+
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
 function createSession(db, userId, nowMs, ttlMs = SESSION_TTL_MS, meta = {}) {
@@ -137,6 +148,7 @@ module.exports = {
   hashPassword,
   verifyPassword,
   createUser,
+  setPassword,
   createSession,
   touchSession,
   sessionId,

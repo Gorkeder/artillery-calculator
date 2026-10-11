@@ -37,6 +37,8 @@ function createStaticHandler({ root, uploadsDir }) {
     }
     if (pathname === '/') pathname = '/index.html';
     if (pathname === '/map') pathname = '/map.html';
+    if (pathname === '/account') pathname = '/account.html';
+    if (pathname === '/privacy') pathname = '/privacy.html';
 
     let base = rootDir;
     let rel = pathname;
