@@ -10,6 +10,7 @@ const ROUTE_MODULES = [
   require('./routes/content'),
   require('./routes/images'),
   require('./routes/marks'),
+  require('./routes/moderation'),
 ];
 
 function compile(pattern) {

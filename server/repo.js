@@ -216,6 +216,45 @@ function countMarks(db, userId) {
   return db.prepare('SELECT COUNT(*) AS n FROM user_marks WHERE user_id = ?').get(userId).n;
 }
 
+// Everything the moderation dialog needs, in one round trip. Only open proposals are listed:
+// a rejected one is waiting for its author to delete it, not for a decision.
+function moderationOverview(db) {
+  const proposals = db
+    .prepare(
+      `SELECT f.id, f.map_id, m.slug AS map_slug, m.title AS map_title, f.category_id, c.name AS category_name,
+              c.shape, f.title, f.description, f.geometry, f.author_id, u.login AS author_login, f.updated_at
+       FROM features f
+       JOIN maps m ON m.id = f.map_id
+       JOIN categories c ON c.id = f.category_id
+       LEFT JOIN users u ON u.id = f.author_id
+       WHERE f.status = 'pending' AND f.reject_reason IS NULL
+       ORDER BY f.id`,
+    )
+    .all()
+    .map((r) => ({ ...r, geometry: JSON.parse(r.geometry) }));
+  const reports = db
+    .prepare(
+      `SELECT r.id, r.feature_id, f.title AS feature_title, m.slug AS map_slug, r.text, r.created_at,
+              r.user_id AS reporter_id, u.login AS reporter_login
+       FROM reports r
+       JOIN features f ON f.id = r.feature_id
+       JOIN maps m ON m.id = f.map_id
+       JOIN users u ON u.id = r.user_id
+       WHERE r.resolved_at IS NULL
+       ORDER BY r.id`,
+    )
+    .all()
+    .map((r) => ({ ...r }));
+  const blocked = db
+    .prepare(
+      `SELECT id, login, proposals_blocked_at AS blocked_at, proposals_block_reason AS reason
+       FROM users WHERE proposals_blocked_at IS NOT NULL ORDER BY proposals_blocked_at, id`,
+    )
+    .all()
+    .map((r) => ({ ...r }));
+  return { proposals, reports, blocked };
+}
+
 module.exports = {
   listMaps,
   getMapBySlug,
@@ -239,4 +278,5 @@ module.exports = {
   getMarkRaw,
   countMarks,
   countOpenProposals,
+  moderationOverview,
 };

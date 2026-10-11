@@ -200,3 +200,109 @@ test('proposal writes are rate limited per user, reads are not', async (t) => {
   assert.equal((await ctx.s.api('GET', '/api/maps/main', { cookie: ctx.aliceCookie })).status, 200);
   assert.equal((await propose(ctx, ctx.bobCookie)).status, 201, 'another user is unaffected');
 });
+
+// ---------- moderation ----------
+
+const post = (ctx, url, cookie, bodyIn) => ctx.s.api('POST', url, { cookie, body: bodyIn || {} });
+
+test('only the admin reads the moderation queue, and it lists open proposals only', async (t) => {
+  const ctx = await setup(t);
+  seedFeature(ctx, { status: 'pending', title: 'Open' });
+  seedFeature(ctx, { status: 'pending', rejectReason: 'dup', title: 'Rejected' });
+  seedFeature(ctx, { status: 'approved', title: 'Published' });
+  assert.equal((await ctx.s.api('GET', '/api/moderation')).status, 401);
+  assert.equal((await ctx.s.api('GET', '/api/moderation', { cookie: ctx.aliceCookie })).status, 403);
+  const r = await ctx.s.api('GET', '/api/moderation', { cookie: ctx.s.adminCookie });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json.proposals.map((p) => p.title), ['Open']);
+  assert.equal(r.json.proposals[0].author_login, 'alice');
+  assert.equal(r.json.proposals[0].map_slug, 'main');
+  assert.equal(r.json.proposals[0].category_name, 'Cache');
+  assert.deepEqual(r.json.reports, []);
+  assert.deepEqual(r.json.blocked, []);
+});
+
+test('approve publishes a proposal, repeats are 409, a rejected one can be approved', async (t) => {
+  const ctx = await setup(t);
+  const id = seedFeature(ctx, { status: 'pending', title: 'To publish' });
+  assert.equal((await post(ctx, `/api/features/${id}/approve`, ctx.aliceCookie)).status, 403);
+  assert.equal((await post(ctx, `/api/features/${id}/approve`, undefined)).status, 401);
+  const ok = await post(ctx, `/api/features/${id}/approve`, ctx.s.adminCookie);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.json.status, 'approved');
+  const row = repo.rawFeature(ctx.s.db, id);
+  assert.equal(row.reviewed_by, ctx.s.adminId);
+  assert.ok(row.reviewed_at);
+  assert.deepEqual((await features(ctx, ctx.bobCookie)).map((f) => f.title), ['To publish']);
+  assert.equal((await post(ctx, `/api/features/${id}/approve`, ctx.s.adminCookie)).status, 409);
+  assert.equal((await post(ctx, '/api/features/99999/approve', ctx.s.adminCookie)).status, 404);
+  const back = seedFeature(ctx, { status: 'pending', rejectReason: 'no', title: 'Second chance' });
+  const again = await post(ctx, `/api/features/${back}/approve`, ctx.s.adminCookie);
+  assert.equal(again.status, 200);
+  assert.equal(repo.rawFeature(ctx.s.db, back).reject_reason, null);
+});
+
+test('reject needs a reason of 1..200 characters and never touches a published object', async (t) => {
+  const ctx = await setup(t);
+  const id = seedFeature(ctx, { status: 'pending' });
+  for (const reason of [undefined, '', '   ', 5, 'x'.repeat(201)]) {
+    const r = await post(ctx, `/api/features/${id}/reject`, ctx.s.adminCookie, { reason });
+    assert.equal(r.status, 400, JSON.stringify(reason));
+  }
+  assert.equal((await post(ctx, `/api/features/${id}/reject`, ctx.aliceCookie, { reason: 'x' })).status, 403);
+  const ok = await post(ctx, `/api/features/${id}/reject`, ctx.s.adminCookie, { reason: ' Дубликат ' });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.json.reject_reason, 'Дубликат');
+  const aliceView = (await features(ctx, ctx.aliceCookie)).find((f) => f.id === id);
+  assert.equal(aliceView.reject_reason, 'Дубликат');
+  assert.equal((await features(ctx, ctx.bobCookie)).length, 0, 'others never see it');
+  const pub = seedFeature(ctx, { status: 'approved', title: 'Published' });
+  const bad = await post(ctx, `/api/features/${pub}/reject`, ctx.s.adminCookie, { reason: 'x' });
+  assert.equal(bad.status, 409);
+  assert.equal(repo.rawFeature(ctx.s.db, pub).status, 'approved');
+});
+
+test('blocking an author rejects their open proposals only and leaves sign-in and marks working', async (t) => {
+  const ctx = await setup(t);
+  const open1 = seedFeature(ctx, { status: 'pending', title: 'Open 1' });
+  const open2 = seedFeature(ctx, { status: 'pending', title: 'Open 2' });
+  const old = seedFeature(ctx, { status: 'pending', rejectReason: 'dup', title: 'Already rejected' });
+  const pub = seedFeature(ctx, { status: 'approved', title: 'Published' });
+  const bobs = seedFeature(ctx, { status: 'pending', author: ctx.bob, title: 'Bob open' });
+  assert.equal((await post(ctx, `/api/users/${ctx.alice}/block-proposals`, ctx.aliceCookie)).status, 403);
+  assert.equal((await post(ctx, `/api/users/${ctx.s.adminId}/block-proposals`, ctx.s.adminCookie)).status, 400, 'admins cannot be blocked');
+  assert.equal((await post(ctx, '/api/users/99999/block-proposals', ctx.s.adminCookie)).status, 404);
+  const r = await post(ctx, `/api/users/${ctx.alice}/block-proposals`, ctx.s.adminCookie, { reason: 'spam' });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.rejected, 2);
+  const reason = (id) => repo.rawFeature(ctx.s.db, id).reject_reason;
+  assert.equal(reason(open1), 'Автор заблокирован');
+  assert.equal(reason(open2), 'Автор заблокирован');
+  assert.equal(reason(old), 'dup', 'an earlier reason is kept');
+  assert.equal(repo.rawFeature(ctx.s.db, pub).status, 'approved');
+  assert.equal(reason(bobs), null, 'other authors are untouched');
+  // The block is visible to the user and closes proposals only.
+  const me = await ctx.s.api('GET', '/api/me', { cookie: ctx.aliceCookie });
+  assert.equal(me.json.user.proposalsBlocked, true);
+  assert.equal(me.json.user.blockReason, 'spam');
+  assert.equal(me.json.can.propose, false);
+  assert.equal((await propose(ctx, ctx.aliceCookie)).status, 403);
+  const mark = await ctx.s.api('POST', '/api/my/marks', {
+    cookie: ctx.aliceCookie, body: { map: 'main', shape: 'point', geometry: { x: 0.5, y: 0.5 } },
+  });
+  assert.equal(mark.status, 201, 'personal marks keep working');
+  const queue = await ctx.s.api('GET', '/api/moderation', { cookie: ctx.s.adminCookie });
+  assert.deepEqual(queue.json.blocked.map((b) => [b.login, b.reason]), [['alice', 'spam']]);
+  assert.deepEqual(queue.json.proposals.map((p) => p.title), ['Bob open']);
+});
+
+test('unblocking restores proposing but does not revive rejected proposals', async (t) => {
+  const ctx = await setup(t);
+  const id = seedFeature(ctx, { status: 'pending' });
+  await post(ctx, `/api/users/${ctx.alice}/block-proposals`, ctx.s.adminCookie);
+  assert.equal((await post(ctx, `/api/users/${ctx.alice}/unblock-proposals`, ctx.aliceCookie)).status, 403);
+  assert.equal((await post(ctx, `/api/users/${ctx.alice}/unblock-proposals`, ctx.s.adminCookie)).status, 200);
+  assert.equal((await propose(ctx, ctx.aliceCookie)).status, 201);
+  assert.equal(repo.rawFeature(ctx.s.db, id).reject_reason, 'Автор заблокирован');
+  assert.equal((await post(ctx, '/api/users/99999/unblock-proposals', ctx.s.adminCookie)).status, 404);
+});
