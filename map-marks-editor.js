@@ -67,8 +67,8 @@
   }
 
   // An admin edits either the shared map or their own marks; everybody else only has marks.
-  function buildModeSwitch() {
-    els.modeShared = h('button', { type: 'button', onclick: function () { setMode('shared'); } }, 'Общие');
+  function buildModeSwitch(sharedLabel) {
+    els.modeShared = h('button', { type: 'button', onclick: function () { setMode('shared'); } }, sharedLabel);
     els.modeMarks = h('button', { type: 'button', onclick: function () { setMode('marks'); } }, 'Мои метки');
     var sw = h('div', { class: 'ed-mode' }, els.modeShared, els.modeMarks);
     var slot = document.getElementById('ed-slot');
@@ -313,9 +313,14 @@
     map.on('pm:drawend', function () { if (active()) ed.drawing = false; });
     document.addEventListener('keydown', onKey);
 
-    if (V.state().me.can.feature) {
-      buildModeSwitch();
+    var can = V.state().me.can;
+    if (can.feature) {
+      buildModeSwitch('Общие');
       setMode('shared');
+    } else if (can.propose && window.MapEditor) {
+      // A user chooses between proposing to the shared map and their private marks; private is the default.
+      buildModeSwitch('Предложить');
+      setMode('marks');
     } else {
       setMode('marks');
     }

@@ -480,7 +480,7 @@
       })
       .catch(function () { notice('Не удалось загрузить карту. Обновите страницу.'); })
       .then(function () {
-        if (geomanLoaded && wantsEditor() && state.me.can.feature) {
+        if (geomanLoaded && wantsEditor() && (state.me.can.feature || state.me.can.propose)) {
           return startEditor().catch(function () { notice('Не удалось загрузить редактор.'); });
         }
         return null;

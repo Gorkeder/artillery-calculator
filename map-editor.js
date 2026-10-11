@@ -9,6 +9,7 @@
   var map = null;
   var ed = { tool: 'select', catId: null, selectedId: null, drawing: false };
   var els = {};
+  var isAdmin = false;
   var SHAPE_LABEL = { point: 'Точка', polygon: 'Полигон', line: 'Линия' };
   var DRAW_SHAPE = { polygon: 'Polygon', line: 'Line' };
 
@@ -52,9 +53,13 @@
       bar.appendChild(b);
     });
     bar.appendChild(h('button', { type: 'button', class: 'danger', onclick: deleteSelected }, 'Удалить'));
-    bar.appendChild(h('span', { class: 'ed-sep' }));
-    bar.appendChild(h('button', { type: 'button', onclick: function () { openDialog('categories'); } }, 'Категории'));
-    bar.appendChild(h('button', { type: 'button', onclick: function () { openDialog('maps'); } }, 'Карты'));
+    if (isAdmin) {
+      bar.appendChild(h('span', { class: 'ed-sep' }));
+      bar.appendChild(h('button', { type: 'button', onclick: function () { openDialog('categories'); } }, 'Категории'));
+      bar.appendChild(h('button', { type: 'button', onclick: function () { openDialog('maps'); } }, 'Карты'));
+      els.moderationBtn = h('button', { type: 'button', onclick: function () { openDialog('moderation'); } }, 'Модерация');
+      bar.appendChild(els.moderationBtn);
+    }
     bar.appendChild(els.status);
     document.getElementById('ed-slot').appendChild(bar);
     els.toolbar = bar;
@@ -163,6 +168,9 @@
 
   function onFeatureClick(id, e) {
     if (V.mode() !== 'shared') return V.defaultClick(id, e);
+    // A user may only select their own unpublished objects; everything else opens its card.
+    var f = V.featureById(id);
+    if (!isAdmin && !(f && f.mine && f.status === 'pending')) return V.defaultClick(id, e);
     if (ed.drawing || ed.tool === 'point') return false;
     if (ed.tool === 'select') { select(id); return true; }
     return false;
@@ -192,7 +200,7 @@
     var f = V.featureById(id);
     if (!layer || !f) return;
     ed.selectedId = id;
-    enableEdit(layer);
+    if (!isLocked(f)) enableEdit(layer);
     highlight(id, true);
     showProps(f);
     map.invalidateSize({ pan: false });
@@ -241,16 +249,24 @@
     els.opacity = h('input', { type: 'range', min: 0, max: 1, step: 0.05 });
     els.opacityRow = h('div', null, h('label', null, 'Прозрачность заливки'), els.opacity);
     els.photos = h('div', { class: 'ed-photos' });
+    els.colorLabel = h('label', null, 'Цвет');
+    els.colorRow = h('div', { class: 'row' }, els.color, els.colorReset);
+    els.photosLabel = h('label', null, 'Фото');
+    els.note = h('p', { class: 'hint' });
     els.panel = h('aside', { class: 'ed-props', hidden: true },
       h('h2', null, 'Объект'),
+      els.note,
       h('label', null, 'Название'), els.title,
       h('label', null, 'Категория'), els.cat,
       h('label', null, 'Описание'), els.desc,
-      h('label', null, 'Цвет'),
-      h('div', { class: 'row' }, els.color, els.colorReset),
+      els.colorLabel, els.colorRow,
       els.opacityRow,
-      h('label', null, 'Фото'), els.photos,
+      els.photosLabel, els.photos,
       h('p', null, h('button', { type: 'button', class: 'danger', onclick: deleteSelected }, 'Удалить объект')));
+    if (!isAdmin) {
+      // Appearance and photos are the admin's call; a proposal is a position, a category and a text.
+      [els.colorLabel, els.colorRow, els.opacityRow, els.photosLabel, els.photos].forEach(function (el) { el.hidden = true; });
+    }
     document.getElementById('props-slot').appendChild(els.panel);
 
     els.title.addEventListener('change', function () { patch({ title: els.title.value }); });
@@ -259,6 +275,11 @@
     els.color.addEventListener('change', function () { patch({ color: els.color.value }); });
     els.colorReset.addEventListener('click', function () { patch({ color: null }); });
     els.opacity.addEventListener('change', function () { patch({ opacity: Number(els.opacity.value) }); });
+  }
+
+  // A rejected proposal of a non-admin cannot be edited any more (the server answers 404).
+  function isLocked(f) {
+    return !isAdmin && f.status === 'pending' && !!f.reject_reason;
   }
 
   function showProps(f) {
@@ -277,9 +298,18 @@
     }
     put(els.color, f.color || cat.color);
     put(els.opacity, f.opacity === null ? 0.25 : f.opacity);
-    els.opacityRow.hidden = cat.shape !== 'polygon';
-    els.colorReset.hidden = f.color === null;
-    if (window.MapEditor.renderPhotos) window.MapEditor.renderPhotos(f);
+    if (isAdmin) {
+      els.opacityRow.hidden = cat.shape !== 'polygon';
+      els.colorReset.hidden = f.color === null;
+      if (window.MapEditor.renderPhotos) window.MapEditor.renderPhotos(f);
+    }
+    // A user's own proposal: show where it stands; a rejected one can only be deleted.
+    var locked = isLocked(f);
+    els.title.disabled = locked;
+    els.desc.disabled = locked;
+    els.cat.disabled = locked;
+    els.note.hidden = isAdmin || f.status !== 'pending';
+    els.note.textContent = f.reject_reason ? 'Отклонено: ' + f.reject_reason : 'На модерации';
   }
 
   function patch(fields) {
@@ -394,6 +424,7 @@
   function start(viewer) {
     V = viewer;
     map = V.leaflet();
+    isAdmin = !!V.state().me.can.feature;
     document.body.classList.add('editing');
     buildToolbar();
     buildProps();
@@ -418,6 +449,7 @@
     map.on('pm:drawstart', function () { ed.drawing = true; });
     map.on('pm:drawend', function () { ed.drawing = false; });
     document.addEventListener('keydown', onKey);
+    refreshModeration();
 
     // Layers created before Geoman was loaded have no `pm`; rebuild them.
     V.renderAll();
@@ -436,9 +468,21 @@
     }
   }
 
+  function setModerationCount(n) {
+    if (els.moderationBtn) els.moderationBtn.textContent = 'Модерация' + (n ? ' (' + n + ')' : '');
+  }
+
+  function refreshModeration() {
+    if (!isAdmin) return;
+    api.get('/api/moderation').then(function (d) {
+      setModerationCount(d.proposals.length + d.reports.length);
+    }, function () { /* the badge is a convenience */ });
+  }
+
   window.MapEditor = {
     start: start,
     setActive: setActive,
+    setModerationCount: setModerationCount,
     status: status,
     renderPhotos: renderPhotos,
     save: save,
