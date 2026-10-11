@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Карта — ANOMA WIKI</title>
+<link rel="icon" href="/favicon.jpg" type="image/jpeg">
+<!-- Yandex.Metrika counter (webvisor off: this page holds the editor and the login form) -->
+<script type="text/javascript">
+    (function(m,e,t,r,i,k,a){
+        m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+        m[i].l=1*new Date();
+        for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+        k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+    })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=112397124', 'ym');
+
+    ym(112397124, 'init', {ssr:true, webvisor:false, clickmap:true, ecommerce:"dataLayer", referrer: document.referrer, url: location.href, accurateTrackBounce:true, trackLinks:true});
+</script>
+<noscript><div><img src="https://mc.yandex.ru/watch/112397124" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+<!-- /Yandex.Metrika counter -->
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/vendor/geoman/leaflet-geoman.css">
+<link rel="stylesheet" href="/map-app.css">
+</head>
+<body>
+<header class="mbar">
+  <a class="mbar-brand" href="/">&larr; ANOMA WIKI</a>
+  <select id="map-select" aria-label="Карта"></select>
+  <div id="ed-slot" class="ed-slot"></div>
+  <span class="grow"></span>
+  <button id="layers-btn" class="only-narrow" type="button">Слои</button>
+  <button id="auth-btn" class="auth-btn" type="button" hidden></button>
+</header>
+<div class="mapwrap">
+  <aside id="side" class="side">
+    <input id="search" type="search" placeholder="Поиск по названию" autocomplete="off">
+    <ul id="search-results" class="results"></ul>
+    <div class="cats-head">
+      <span>Категории</span>
+      <span class="grow"></span>
+      <button id="show-all" type="button">все</button>
+      <button id="hide-all" type="button">скрыть</button>
+    </div>
+    <ul id="cats" class="cats"></ul>
+  </aside>
+  <main id="map" class="map"></main>
+  <div id="props-slot"></div>
+</div>
+<div id="sheet" class="sheet" hidden></div>
+<div id="notice" class="notice" hidden></div>
+<dialog id="login-dlg" class="dlg">
+  <form id="login-form">
+    <h2>Вход для редакторов</h2>
+    <label>Логин <input name="login" autocomplete="username" required></label>
+    <label>Пароль <input name="password" type="password" autocomplete="current-password" required></label>
+    <p id="login-err" class="err" hidden></p>
+    <div class="row">
+      <button type="submit" class="primary">Войти</button>
+      <button type="button" id="login-cancel">Отмена</button>
+    </div>
+  </form>
+</dialog>
+<script src="/vendor/leaflet/leaflet.js"></script>
+<script src="/map-common.js"></script>
+<script src="/map-icons.js"></script>
+<script src="/map-geo.js"></script>
+<script src="/map-app.js"></script>
+</body>
+</html>
