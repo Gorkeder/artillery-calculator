@@ -55,6 +55,7 @@
   function markerIcon(feature, cat) {
     var el = h('div', { class: 'mk' }, svgIcon(cat.icon));
     el.style.setProperty('--c', feature.color || cat.color);
+    if (feature.status === 'pending') el.classList.add('pending');
     return L.divIcon({ html: el, className: 'mk-wrap', iconSize: [30, 30], iconAnchor: [15, 15] });
   }
 
@@ -63,6 +64,7 @@
     if (!cat || !state.size) return null;
     var size = state.size;
     var style = Geo.featureStyle(feature, cat);
+    if (feature.status === 'pending') style.dashArray = '6 4';
     var layer;
     if (cat.shape === 'point') {
       layer = L.marker(Geo.toLatLng(feature.geometry, size), {
@@ -71,7 +73,8 @@
     } else if (cat.shape === 'polygon') {
       layer = L.polygon(Geo.pointsToLatLngs(feature.geometry.points, size), style);
     } else {
-      layer = L.polyline(Geo.pointsToLatLngs(feature.geometry.points, size), { color: style.color, weight: 3 });
+      layer = L.polyline(Geo.pointsToLatLngs(feature.geometry.points, size),
+        { color: style.color, weight: 3, dashArray: style.dashArray });
     }
     layer.featureId = feature.id;
     layer.on('click', function (e) {
@@ -172,16 +175,59 @@
 
   // ---------- card ----------
 
+  // "На модерации" / "Отклонено: причина" for the author's own unpublished object.
+  function statusLine(feature) {
+    if (feature.status !== 'pending') return null;
+    var text = feature.reject_reason ? 'Отклонено: ' + feature.reject_reason : 'На модерации';
+    return h('div', { class: 'card-status' + (feature.reject_reason ? ' rejected' : '') }, text);
+  }
+
+  var REPORT_ERRORS = {
+    report_exists: 'Вы уже сообщали об этом объекте, мы рассмотрим.',
+    reports_limit: 'Слишком много открытых жалоб, дождитесь решения по прежним.',
+    proposals_blocked: 'Отправка сообщений для вас закрыта.',
+  };
+
+  // A collapsed "Сообщить об ошибке" form for a published object (not for guests or blocked users).
+  function reportBox(feature) {
+    if (feature.status !== 'approved' || !state.me.can.propose) return null;
+    var note = h('p', { class: 'hint' });
+    var text = h('textarea', { rows: 3, maxLength: 500, placeholder: 'Что не так с этим объектом?' });
+    var send = h('button', { type: 'button', class: 'primary' }, 'Отправить');
+    var form = h('div', { class: 'report-form', hidden: true }, text, h('div', { class: 'row' }, send), note);
+    // The form lives inside a Leaflet popup: keys typed here must not pan/zoom the map or close the card.
+    L.DomEvent.disableClickPropagation(form);
+    L.DomEvent.on(form, 'keydown keyup keypress', L.DomEvent.stopPropagation);
+    var open = h('button', { type: 'button', class: 'link' }, 'Сообщить об ошибке');
+    open.addEventListener('click', function () { form.hidden = !form.hidden; });
+    send.addEventListener('click', function () {
+      var value = text.value.trim();
+      if (!value) { note.textContent = 'Опишите ошибку.'; return; }
+      send.disabled = true;
+      api.post('/api/features/' + feature.id + '/report', { text: value }).then(function () {
+        form.textContent = '';
+        form.appendChild(h('p', { class: 'ok' }, 'Спасибо, сообщение отправлено.'));
+      }, function (err) {
+        send.disabled = false;
+        note.textContent = REPORT_ERRORS[err.message] ||
+          (err.status === 429 ? 'Слишком часто, подождите немного.' : 'Не удалось отправить: ' + err.message);
+      });
+    });
+    return h('div', { class: 'report' }, open, form);
+  }
+
   function cardNode(feature) {
     var cat = catById(feature.category_id);
     return h('div', { class: 'card' },
       h('h3', null, feature.title || (cat ? cat.name : '')),
       h('div', { class: 'card-cat' }, cat ? cat.name : ''),
+      statusLine(feature),
       feature.description ? h('p', { class: 'card-text' }, feature.description) : null,
       feature.images.length ? h('div', { class: 'card-photos' }, feature.images.map(function (img) {
         return h('a', { href: img.url, target: '_blank', rel: 'noopener' },
           h('img', { src: img.url, loading: 'lazy', alt: '' }));
-      })) : null);
+      })) : null,
+      reportBox(feature));
   }
 
   function updateUrl() {
@@ -379,6 +425,10 @@
     if (!user) {
       $('marks-slot').appendChild(h('p', { class: 'hint' }, 'Войдите, чтобы ставить свои метки. ',
         h('a', { href: '/account?next=' + encodeURIComponent(location.pathname + location.search) }, 'Войти')));
+    }
+    if (user && user.proposalsBlocked) {
+      $('side').appendChild(h('p', { class: 'hint' },
+        'Отправка предложений для вас закрыта' + (user.blockReason ? ': ' + user.blockReason : '') + '.'));
     }
   }
 
