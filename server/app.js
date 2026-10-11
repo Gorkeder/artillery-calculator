@@ -9,6 +9,7 @@ const ROUTE_MODULES = [
   require('./routes/account'),
   require('./routes/content'),
   require('./routes/images'),
+  require('./routes/marks'),
 ];
 
 function compile(pattern) {
@@ -39,6 +40,7 @@ function createApp(opts) {
     registerEmail: createRateLimiter({ max: 3, windowMs: 24 * HOUR }),
     mailIp: createRateLimiter({ max: 10, windowMs: HOUR }),
     mailEmail: createRateLimiter({ max: 3, windowMs: HOUR }),
+    marksWrite: createRateLimiter({ max: 120, windowMs: 10 * MIN }),
     ...(opts.limiters || {}),
   };
   const routes = ROUTE_MODULES.flat().map((r) => ({ ...r, ...compile(r.pattern) }));
