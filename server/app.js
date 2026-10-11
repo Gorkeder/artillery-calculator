@@ -4,7 +4,12 @@ const { HttpError, sendJson } = require('./http-util');
 const { parseCookies, getSessionUser, touchSession, createRateLimiter } = require('./auth');
 const { createUnconfiguredMailer } = require('./mailer');
 
-const ROUTE_MODULES = [require('./routes/auth'), require('./routes/content'), require('./routes/images')];
+const ROUTE_MODULES = [
+  require('./routes/auth'),
+  require('./routes/account'),
+  require('./routes/content'),
+  require('./routes/images'),
+];
 
 function compile(pattern) {
   const keys = [];
