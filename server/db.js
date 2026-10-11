@@ -104,6 +104,28 @@ CREATE TABLE user_marks (
 CREATE INDEX idx_user_marks_user_map ON user_marks(user_id, map_id);
 `,
   },
+  {
+    version: 4,
+    sql: `
+ALTER TABLE features ADD COLUMN reject_reason TEXT;
+ALTER TABLE features ADD COLUMN reviewed_at TEXT;
+ALTER TABLE features ADD COLUMN reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE users ADD COLUMN proposals_blocked_at TEXT;
+ALTER TABLE users ADD COLUMN proposals_block_reason TEXT;
+CREATE TABLE reports (
+  id INTEGER PRIMARY KEY,
+  feature_id INTEGER NOT NULL REFERENCES features(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  resolved_at TEXT,
+  resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_reports_open ON reports(resolved_at, feature_id);
+CREATE UNIQUE INDEX idx_reports_one_open ON reports(feature_id, user_id) WHERE resolved_at IS NULL;
+CREATE INDEX idx_features_status ON features(status, reviewed_at);
+`,
+  },
 ];
 
 function migrate(db) {
@@ -130,4 +152,4 @@ function openDb(file) {
   return db;
 }
 
-module.exports = { openDb, migrate, SCHEMA };
+module.exports = { openDb, migrate, SCHEMA, MIGRATIONS };

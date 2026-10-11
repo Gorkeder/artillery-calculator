@@ -103,7 +103,8 @@ function getSessionUser(db, token, nowMs) {
   if (!token || typeof token !== 'string') return null;
   const row = db
     .prepare(
-      'SELECT s.expires_at, u.id, u.login, u.role FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?',
+      `SELECT s.expires_at, u.id, u.login, u.role, u.proposals_blocked_at
+       FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?`,
     )
     .get(sha256(token));
   if (!row) return null;
@@ -111,7 +112,7 @@ function getSessionUser(db, token, nowMs) {
     destroySession(db, token);
     return null;
   }
-  return { id: row.id, login: row.login, role: row.role };
+  return { id: row.id, login: row.login, role: row.role, proposalsBlocked: Boolean(row.proposals_blocked_at) };
 }
 
 function parseCookies(header) {
