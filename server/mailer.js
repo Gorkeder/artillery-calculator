@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const net = require('node:net');
 const tls = require('node:tls');
 
 const ADDR_RE = /^[^\s<>"@,;:\\\x00-\x1f\x7f-\x9f]+@[^\s<>"@,;:\\\x00-\x1f\x7f-\x9f]+$/;
@@ -48,7 +49,7 @@ function authMechanisms(lines) {
 }
 
 // One message per connection. `connect()` must return a connected duplex socket
-// (tls.connect in production, plain net in tests).
+// (tls.connect for implicit TLS, plain net.connect for a loopback relay, or a test double).
 function smtpSend({ user, pass, helo, connect, timeoutMs }, { from, to, data }) {
   return new Promise((resolve, reject) => {
     const socket = connect();
@@ -121,7 +122,9 @@ function smtpSend({ user, pass, helo, connect, timeoutMs }, { from, to, data }) 
         say('EHLO ' + helo);
         const ehlo = await expect([250], 'EHLO');
         const mechs = authMechanisms(ehlo.lines);
-        if (mechs.has('LOGIN') && !mechs.has('PLAIN')) {
+        if (!user) {
+          // Local relay (loopback Postfix): no authentication.
+        } else if (mechs.has('LOGIN') && !mechs.has('PLAIN')) {
           await authLogin();
         } else {
           // Try PLAIN first. Whatever EHLO advertised (servers may advertise it and still refuse),
@@ -150,8 +153,22 @@ function smtpSend({ user, pass, helo, connect, timeoutMs }, { from, to, data }) 
   });
 }
 
-function createSmtpMailer({ host, port, user, pass, from, connect, timeoutMs = 20000, now = Date.now }) {
-  const open = connect || (() => tls.connect({ host, port, servername: host }));
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
+const isLoopback = (host) => LOOPBACK_HOSTS.has(String(host).toLowerCase());
+
+// `secure: true` (default) is implicit TLS; `secure: false` is plain TCP and is allowed only to a
+// loopback host (otherwise login links would travel in clear text). An empty `user` means no AUTH,
+// which is likewise allowed only to a loopback host (never an unauthenticated remote relay).
+function createSmtpMailer({ host, port, user, pass, from, secure = true, connect, timeoutMs = 20000, now = Date.now }) {
+  if (!secure && !isLoopback(host)) {
+    throw new Error('SMTP_SECURE=0 (plain SMTP) is allowed only for a loopback SMTP_HOST (127.0.0.1, ::1, localhost)');
+  }
+  if (!user && !isLoopback(host)) {
+    throw new Error('SMTP_USER is required unless SMTP_HOST is loopback (127.0.0.1, ::1, localhost)');
+  }
+  const open = connect || (secure
+    ? () => tls.connect({ host, port, servername: host })
+    : () => net.connect(port, host));
   const helo = from.split('@')[1];
   return {
     configured: true,
@@ -194,15 +211,27 @@ function createUnconfiguredMailer() {
 function createMailer(cfg) {
   if (cfg.mailMode === 'log') return createLogMailer();
   if (cfg.mailMode === 'smtp') {
+    const secure = cfg.smtpSecure !== false;
+    // Secure mode: user and password are required. Local relay (SMTP_SECURE=0): they are optional,
+    // but a user without a password is still an error.
+    const needAuth = secure || Boolean(cfg.smtpUser);
     const missing = [
-      ['SMTP_HOST', cfg.smtpHost],
-      ['SMTP_USER', cfg.smtpUser],
-      ['SMTP_PASS', cfg.smtpPass],
-      ['MAIL_FROM', cfg.mailFrom],
-    ].filter(([, v]) => !v).map(([k]) => k);
+      ['SMTP_HOST', cfg.smtpHost, true],
+      ['SMTP_USER', cfg.smtpUser, secure],
+      ['SMTP_PASS', cfg.smtpPass, needAuth],
+      ['MAIL_FROM', cfg.mailFrom, true],
+    ].filter(([, v, req]) => req && !v).map(([k]) => k);
     if (missing.length) throw new Error('MAIL_MODE=smtp requires ' + missing.join(', '));
+    if (!secure && !cfg.smtpUser && cfg.smtpPass) {
+      console.warn('anoma-api: SMTP_PASS is ignored because SMTP_USER is not set');
+    }
     return createSmtpMailer({
-      host: cfg.smtpHost, port: cfg.smtpPort || 465, user: cfg.smtpUser, pass: cfg.smtpPass, from: cfg.mailFrom,
+      host: cfg.smtpHost,
+      port: cfg.smtpPort || (secure ? 465 : 25),
+      user: cfg.smtpUser,
+      pass: cfg.smtpPass,
+      from: cfg.mailFrom,
+      secure,
     });
   }
   return createUnconfiguredMailer();

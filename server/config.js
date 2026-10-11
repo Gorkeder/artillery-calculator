@@ -9,7 +9,9 @@ function loadConfig(env = process.env) {
     devStatic: env.DEV_STATIC || null,
     mailMode: env.MAIL_MODE || null,
     smtpHost: env.SMTP_HOST || null,
-    smtpPort: Number(env.SMTP_PORT || 465),
+    // SMTP_SECURE=0: plain TCP, loopback relay only (enforced in mailer.js). Default: implicit TLS.
+    smtpSecure: env.SMTP_SECURE !== '0',
+    smtpPort: Number(env.SMTP_PORT || (env.SMTP_SECURE === '0' ? 25 : 465)),
     smtpUser: env.SMTP_USER || null,
     smtpPass: env.SMTP_PASS || null,
     mailFrom: env.MAIL_FROM || null,

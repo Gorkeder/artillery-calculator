@@ -40,8 +40,9 @@ test('buildMessage refuses addresses that could inject headers', () => {
 });
 
 // A tiny scripted SMTP server (plain TCP: the mailer takes an injectable `connect`).
-function fakeSmtp({ failAuth = false, silent = false } = {}) {
+function fakeSmtp({ failAuth = false, silent = false, advertiseAuth = true } = {}) {
   const received = [];
+  const lines = [];
   const server = net.createServer((sock) => {
     sock.setEncoding('utf8');
     const cur = {};
@@ -67,7 +68,8 @@ function fakeSmtp({ failAuth = false, silent = false } = {}) {
         if (i < 0) return;
         const line = buf.slice(0, i);
         buf = buf.slice(i + 2);
-        if (/^EHLO /.test(line)) say('250-fake\r\n250 AUTH PLAIN');
+        lines.push(line);
+        if (/^EHLO /.test(line)) say(advertiseAuth ? '250-fake\r\n250 AUTH PLAIN' : '250-fake\r\n250 8BITMIME');
         else if (/^AUTH PLAIN /.test(line)) {
           cur.auth = line.slice('AUTH PLAIN '.length);
           say(failAuth ? '535 bad credentials' : '235 ok');
@@ -79,7 +81,7 @@ function fakeSmtp({ failAuth = false, silent = false } = {}) {
     });
   });
   return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve({ server, received, port: server.address().port }));
+    server.listen(0, '127.0.0.1', () => resolve({ server, received, lines, port: server.address().port }));
   });
 }
 
@@ -380,4 +382,121 @@ test('templates mention the login, the link and the lifetime', () => {
   assert.ok(v.text.includes('stalker') && v.text.includes('https://x.test/account#verify=abc') && v.text.includes('24'));
   const r = resetPasswordMessage({ login: 'stalker', url: 'https://x.test/account#reset=abc' });
   assert.ok(r.text.includes('https://x.test/account#reset=abc') && r.text.includes('1 час'));
+});
+
+// ---- local relay mode: plain TCP to a loopback Postfix, no AUTH ----
+
+const LOCAL = { mailMode: 'smtp', smtpHost: '127.0.0.1', smtpPort: 25, smtpSecure: false, mailFrom: 'noreply@anoma-wiki.ru' };
+
+test('relay: without a user the AUTH step is skipped entirely and the message is delivered', async (t) => {
+  const f = await fakeSmtp();
+  t.after(() => f.server.close());
+  const m = createSmtpMailer({
+    host: '127.0.0.1', port: f.port, secure: false, from: 'noreply@anoma-wiki.ru',
+    connect: () => net.connect(f.port, '127.0.0.1'),
+  });
+  await m.send({ to: 'user@example.com', subject: 'Тема', text: 'Тело' });
+  assert.equal(f.lines.some((l) => /^AUTH/i.test(l)), false);
+  assert.deepEqual(f.lines.slice(0, 3).map((l) => l.split(/[ :]/)[0]), ['EHLO', 'MAIL', 'RCPT']);
+  assert.equal(f.lines[0], 'EHLO anoma-wiki.ru');
+  assert.equal(f.received.length, 1);
+  assert.equal(f.received[0].auth, undefined);
+  assert.equal(f.received[0].from, '<noreply@anoma-wiki.ru>');
+  assert.equal(f.received[0].to, '<user@example.com>');
+  assert.equal(decodeBody(f.received[0].data), 'Тело');
+});
+
+test('relay: default (non-injected) plain connect reaches a real loopback server', async (t) => {
+  const f = await fakeSmtp();
+  t.after(() => f.server.close());
+  const m = createMailer({ ...LOCAL, smtpPort: f.port });
+  assert.equal(m.configured, true);
+  await m.send({ to: 'user@example.com', subject: 's', text: 'через net.connect' });
+  assert.equal(f.received.length, 1);
+  assert.equal(decodeBody(f.received[0].data), 'через net.connect');
+  assert.equal(f.lines.some((l) => /^AUTH/i.test(l)), false);
+});
+
+test('relay: with SMTP_USER set in loopback plain mode AUTH still runs', async (t) => {
+  const f = await fakeSmtp();
+  t.after(() => f.server.close());
+  const m = createMailer({ ...LOCAL, smtpPort: f.port, smtpUser: 'u', smtpPass: 'p' });
+  await m.send({ to: 'user@example.com', subject: 's', text: 't' });
+  assert.equal(Buffer.from(f.received[0].auth, 'base64').toString(), '\0u\0p');
+});
+
+test('relay: createMailer accepts loopback hosts without user/pass', () => {
+  for (const smtpHost of ['127.0.0.1', 'localhost', '::1']) {
+    const m = createMailer({ ...LOCAL, smtpHost });
+    assert.equal(m.configured, true);
+  }
+});
+
+test('relay: plain-text SMTP to a non-loopback host is refused', () => {
+  assert.throws(
+    () => createMailer({ ...LOCAL, smtpHost: 'smtp.beget.com', smtpUser: 'u', smtpPass: 'p' }),
+    /SMTP_SECURE=0.*(loopback|127\.0\.0\.1)/,
+  );
+  assert.throws(() => createMailer({ ...LOCAL, smtpHost: '10.0.0.5' }), /loopback|127\.0\.0\.1/);
+});
+
+test('relay: no SMTP_USER (no AUTH) with a non-loopback host is refused, also in secure mode', () => {
+  assert.throws(
+    () => createMailer({ mailMode: 'smtp', smtpHost: 'smtp.beget.com', smtpPort: 465, smtpSecure: true, smtpPass: 'p', mailFrom: 'n@x.io' }),
+    /SMTP_USER/,
+  );
+  assert.throws(
+    () => createSmtpMailer({ host: 'smtp.beget.com', port: 465, from: 'n@x.io', connect: () => null }),
+    /loopback|SMTP_USER/,
+  );
+});
+
+test('relay: missing SMTP_HOST / MAIL_FROM are named; secure mode still requires user and password', () => {
+  assert.throws(() => createMailer({ ...LOCAL, smtpHost: null }), /SMTP_HOST/);
+  assert.throws(() => createMailer({ ...LOCAL, mailFrom: null }), /MAIL_FROM/);
+  assert.throws(
+    () => createMailer({ mailMode: 'smtp', smtpHost: 'h', smtpPort: 465, mailFrom: 'n@x.io' }),
+    /MAIL_MODE=smtp requires SMTP_USER, SMTP_PASS/,
+  );
+  assert.throws(
+    () => createMailer({ mailMode: 'smtp', smtpHost: 'h', smtpPort: 465, smtpSecure: true, smtpUser: 'u', mailFrom: 'n@x.io' }),
+    /MAIL_MODE=smtp requires SMTP_PASS/,
+  );
+});
+
+test('relay: delivery works when EHLO advertises no AUTH at all', async (t) => {
+  const f = await fakeSmtp({ advertiseAuth: false });
+  t.after(() => f.server.close());
+  const m = createMailer({ ...LOCAL, smtpPort: f.port });
+  await m.send({ to: 'user@example.com', subject: 's', text: 'без AUTH в EHLO' });
+  assert.equal(f.received.length, 1);
+  assert.equal(decodeBody(f.received[0].data), 'без AUTH в EHLO');
+  assert.equal(f.lines.some((l) => /^AUTH/i.test(l)), false);
+});
+
+test('relay: loopback check fails closed (exact match, no lookalikes)', () => {
+  const refused = [
+    'localhost.', 'localhost.evil.example', '127.0.0.1.evil.example', '127.0.0.2',
+    '[::1]', '::ffff:127.0.0.1', ' localhost',
+  ];
+  for (const smtpHost of refused) {
+    assert.throws(() => createMailer({ ...LOCAL, smtpHost }), /loopback/, JSON.stringify(smtpHost));
+  }
+  for (const smtpHost of ['LOCALHOST', 'localhost', '127.0.0.1', '::1']) {
+    assert.equal(createMailer({ ...LOCAL, smtpHost }).configured, true, smtpHost);
+  }
+});
+
+test('relay: SMTP_PASS without SMTP_USER warns once, without the secret, and still creates the mailer', (t) => {
+  const warn = t.mock.method(console, 'warn', () => {});
+  const m = createMailer({ ...LOCAL, smtpPass: 'sup3r-secret' });
+  assert.equal(m.configured, true);
+  assert.equal(warn.mock.callCount(), 1);
+  assert.equal(warn.mock.calls[0].arguments[0], 'anoma-api: SMTP_PASS is ignored because SMTP_USER is not set');
+  createMailer({ ...LOCAL });
+  assert.equal(warn.mock.callCount(), 1);
+});
+
+test('relay: SMTP_USER without SMTP_PASS in plain mode is refused', () => {
+  assert.throws(() => createMailer({ ...LOCAL, smtpUser: 'u' }), /requires SMTP_PASS/);
 });
