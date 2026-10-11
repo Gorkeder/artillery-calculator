@@ -61,6 +61,7 @@ module.exports = [
       need(c, 'image:write', row);
       if (repo.countFeatureImages(c.db, id) >= MAX_PHOTOS) throw new HttpError(409, `at most ${MAX_PHOTOS} photos per object`);
       const { buf, type } = await readImage(c);
+      if (!imageSize(buf)) throw new HttpError(400, 'cannot read image dimensions');
       const rel = storeFile(c.uploadsDir, 'features', buf, EXT[type]);
       return { status: 201, body: repo.addFeatureImage(c.db, id, rel) };
     },

@@ -122,3 +122,17 @@ test('deleting a feature, a category or a map removes their photo files (no orph
   assert.equal(onDisk(c), false);
   assert.equal(onDisk(mapImg), false);
 });
+
+test('feature photos get the same truncated/broken-file check as map images', async (t) => {
+  const { s, ck, feat } = await setup(t);
+  const url = `/api/features/${feat.id}/images`;
+  const truncated = png(10, 10).subarray(0, 12);
+  const sigOnly = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  for (const raw of [truncated, sigOnly, Buffer.from('<svg/>')]) {
+    const r = await s.api('PUT', url, { cookie: ck, raw, headers: { 'content-type': 'image/png' } });
+    assert.equal(r.status, 400, 'body of length ' + raw.length);
+  }
+  assert.equal(fs.existsSync(path.join(s.uploadsDir, 'features')), false);
+  const data = (await s.api('GET', '/api/maps/north', { cookie: ck })).json;
+  assert.equal(data.features[0].images.length, 0);
+});

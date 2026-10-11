@@ -72,6 +72,9 @@
   function setActiveCat(id) {
     ed.catId = id;
     markActiveCategory();
+    // A drawing tool must always draw the shape of the active category.
+    var c = V.catById(id);
+    if (ed.tool !== 'select' && c && c.shape !== ed.tool) setTool(c.shape);
   }
 
   function markActiveCategory() {
@@ -256,15 +259,20 @@
 
   function showProps(f) {
     var cat = V.catById(f.category_id);
+    // Never overwrite the field the admin is typing in: a save finishing for another
+    // field re-renders the panel, and that must not wipe in-progress text.
+    function put(el, value) { if (document.activeElement !== el) el.value = value; }
     els.panel.hidden = false;
-    els.title.value = f.title || '';
-    els.desc.value = f.description || '';
-    els.cat.textContent = '';
-    V.state().categories.forEach(function (c) {
-      if (c.shape === cat.shape) els.cat.appendChild(h('option', { value: c.id, selected: c.id === f.category_id }, c.name));
-    });
-    els.color.value = f.color || cat.color;
-    els.opacity.value = f.opacity === null ? 0.25 : f.opacity;
+    put(els.title, f.title || '');
+    put(els.desc, f.description || '');
+    if (document.activeElement !== els.cat) {
+      els.cat.textContent = '';
+      V.state().categories.forEach(function (c) {
+        if (c.shape === cat.shape) els.cat.appendChild(h('option', { value: c.id, selected: c.id === f.category_id }, c.name));
+      });
+    }
+    put(els.color, f.color || cat.color);
+    put(els.opacity, f.opacity === null ? 0.25 : f.opacity);
     els.opacityRow.hidden = cat.shape !== 'polygon';
     els.colorReset.hidden = f.color === null;
     if (window.MapEditor.renderPhotos) window.MapEditor.renderPhotos(f);
