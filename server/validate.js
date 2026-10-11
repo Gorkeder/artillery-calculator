@@ -116,6 +116,43 @@ function validateMap(input, { create = false } = {}) {
   return ok(out);
 }
 
+const MAX_MARK_POINTS = 100;
+
+function validateMark(input, { create = false } = {}) {
+  const out = {};
+  if (create) {
+    if (!SHAPES.includes(input.shape)) return fail('shape must be point, polygon or line');
+    out.shape = input.shape;
+  }
+  if ('title' in input) {
+    if (typeof input.title !== 'string' || input.title.length > 80) return fail('title must be a string up to 80 characters');
+    out.title = input.title;
+  }
+  if ('description' in input) {
+    if (typeof input.description !== 'string' || input.description.length > 1000) {
+      return fail('description must be a string up to 1000 characters');
+    }
+    out.description = input.description;
+  }
+  if ('color' in input) {
+    if (typeof input.color !== 'string' || !COLOR_RE.test(input.color)) return fail('color must be #rrggbb');
+    out.color = input.color;
+  }
+  if ('icon' in input) {
+    if (typeof input.icon !== 'string' || !ICON_RE.test(input.icon)) return fail('icon must match [a-z0-9-]{1,32}');
+    out.icon = input.icon;
+  }
+  return ok(out);
+}
+
+function validateMarkGeometry(shape, g) {
+  const r = validateGeometry(shape, g);
+  if (r.ok && r.value.points && r.value.points.length > MAX_MARK_POINTS) {
+    return fail(`${shape} may have at most ${MAX_MARK_POINTS} points`);
+  }
+  return r;
+}
+
 const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 function sniffImageType(buf) {
@@ -168,6 +205,8 @@ module.exports = {
   validateCategory,
   validateFeature,
   validateMap,
+  validateMark,
+  validateMarkGeometry,
   sniffImageType,
   imageSize,
 };

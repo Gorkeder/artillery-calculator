@@ -85,6 +85,25 @@ CREATE TABLE auth_tokens (
 CREATE INDEX idx_auth_tokens_user ON auth_tokens(user_id, kind);
 `,
   },
+  {
+    version: 3,
+    sql: `
+CREATE TABLE user_marks (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  map_id INTEGER NOT NULL REFERENCES maps(id) ON DELETE CASCADE,
+  shape TEXT NOT NULL CHECK (shape IN ('point', 'polygon', 'line')),
+  geometry TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  color TEXT NOT NULL DEFAULT '#d4c24f',
+  icon TEXT NOT NULL DEFAULT 'question',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_user_marks_user_map ON user_marks(user_id, map_id);
+`,
+  },
 ];
 
 function migrate(db) {

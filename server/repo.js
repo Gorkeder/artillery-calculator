@@ -166,6 +166,42 @@ function getFeatureImage(db, id) {
   return db.prepare('SELECT id, feature_id, path FROM feature_images WHERE id = ?').get(id) || null;
 }
 
+const MARK_SELECT =
+  'SELECT m.*, mp.slug AS map_slug FROM user_marks m JOIN maps mp ON mp.id = m.map_id';
+
+// user_id is deliberately absent: a mark is only ever shown to its owner.
+function markOut(r) {
+  return {
+    id: r.id,
+    map: r.map_slug,
+    shape: r.shape,
+    geometry: JSON.parse(r.geometry),
+    title: r.title,
+    description: r.description,
+    color: r.color,
+    icon: r.icon,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  };
+}
+
+function listMarks(db, userId, mapId) {
+  return db.prepare(MARK_SELECT + ' WHERE m.user_id = ? AND m.map_id = ? ORDER BY m.id').all(userId, mapId).map(markOut);
+}
+
+function getMark(db, id) {
+  const r = db.prepare(MARK_SELECT + ' WHERE m.id = ?').get(id);
+  return r ? markOut(r) : null;
+}
+
+function getMarkRaw(db, id) {
+  return db.prepare('SELECT * FROM user_marks WHERE id = ?').get(id) || null;
+}
+
+function countMarks(db, userId) {
+  return db.prepare('SELECT COUNT(*) AS n FROM user_marks WHERE user_id = ?').get(userId).n;
+}
+
 module.exports = {
   listMaps,
   getMapBySlug,
@@ -184,4 +220,8 @@ module.exports = {
   countFeatureImages,
   addFeatureImage,
   getFeatureImage,
+  listMarks,
+  getMark,
+  getMarkRaw,
+  countMarks,
 };
