@@ -121,16 +121,75 @@ test('a taken login answers 409 identically whether or not the email is register
   assert.equal(s.mailer.sent.length, 1);
 });
 
-test('registering again with the email of an unverified account re-sends the link', async (t) => {
+test('taken logins do not burn the email budgets of the person registering', async (t) => {
   const s = await startTestServer();
   t.after(() => s.cleanup());
-  await register(s);
-  const first = s.lastToken('verify');
-  const r = await register(s, { login: 'newbie2' });
+  for (const login of ['taken1', 'taken2', 'taken3']) {
+    createUser(s.db, { login, password: 'some-password-1', role: 'user', email: login + '@example.com' });
+  }
+  for (const login of ['taken1', 'taken2', 'taken3']) {
+    const r = await register(s, { login, email: 'fresh@example.com' });
+    assert.equal(r.status, 409, login);
+    assert.equal(r.json.error, 'login_taken');
+  }
+  assert.equal(s.mailer.sent.length, 0);
+  const ok = await register(s, { login: 'freelogin', email: 'fresh@example.com' });
+  assert.equal(ok.status, 200);
+  assert.equal(s.mailer.sent.length, 1);
+  assert.equal(s.mailer.sent[0].to, 'fresh@example.com');
+});
+
+test('an email held by a stale unverified account is taken over by the new registration', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  const fresh = await register(s, { login: 'someone', email: 'someone@example.com' });
+  await register(s); // L = newbie, unverified, email X = newbie@example.com
+  const oldToken = s.lastToken('verify');
+  const before = s.mailer.sent.length;
+  const r = await register(s, { login: 'replacer', email: 'NewBie@example.com', password: 'replacer-pass-1' });
+  assert.equal(r.status, fresh.status);
+  assert.deepEqual(r.json, fresh.json);
+  assert.equal(s.db.prepare("SELECT COUNT(*) AS n FROM users WHERE login = 'newbie'").get().n, 0, 'L is gone');
+  const v = s.db.prepare("SELECT email, email_verified_at FROM users WHERE login = 'replacer'").get();
+  assert.equal(v.email, 'newbie@example.com');
+  assert.equal(v.email_verified_at, null);
+  assert.equal(s.mailer.sent.length, before + 1, 'exactly one new mail');
+  assert.equal(s.mailer.sent[before].to, 'newbie@example.com');
+  assert.match(s.mailer.sent[before].text, /replacer/);
+  const stale = await s.api('POST', '/api/verify-email', { body: { token: oldToken } });
+  assert.equal(stale.status, 400);
+  assert.equal(stale.json.error, 'token_invalid');
+  const ok = await s.api('POST', '/api/verify-email', { body: { token: s.lastToken('verify') } });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.json.user.login, 'replacer');
+  const login = await s.api('POST', '/api/login', { body: { login: 'replacer', password: 'replacer-pass-1' } });
+  assert.equal(login.status, 200);
+});
+
+test('an email held by a verified account is never taken over', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  await registerAndVerify(s);
+  const before = s.mailer.sent.length;
+  const r = await register(s, { login: 'replacer', email: 'newbie@example.com' });
   assert.equal(r.status, 200);
-  assert.equal(s.mailer.sent.length, 2);
-  assert.notEqual(s.lastToken('verify'), first);
-  assert.equal((await s.api('POST', '/api/verify-email', { body: { token: first } })).status, 400);
+  assert.deepEqual(r.json, { ok: true });
+  assert.equal(s.mailer.sent.length, before, 'no mail');
+  assert.equal(s.db.prepare("SELECT COUNT(*) AS n FROM users WHERE login = 'newbie'").get().n, 1, 'no deletion');
+  assert.equal(s.db.prepare("SELECT COUNT(*) AS n FROM users WHERE login = 'replacer'").get().n, 0, 'nothing created');
+});
+
+test('an IP over its mail budget cannot burn a victim email budget', async (t) => {
+  const charged = [];
+  const spy = { allow: (key) => { charged.push(key); return true; } };
+  const s = await startTestServer({
+    limiters: { mailIp: createRateLimiter({ max: 1, windowMs: 60000 }), mailEmail: spy },
+  });
+  t.after(() => s.cleanup());
+  const body = { email: 'victim@example.com' };
+  assert.equal((await s.api('POST', '/api/resend-verification', { body })).status, 200);
+  assert.equal((await s.api('POST', '/api/resend-verification', { body })).status, 429);
+  assert.deepEqual(charged, ['victim@example.com']);
 });
 
 test('the honeypot field silently swallows bot registrations', async (t) => {

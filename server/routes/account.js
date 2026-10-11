@@ -23,7 +23,8 @@ function requireMail(c) {
 
 function checkMailLimits(c, email) {
   const now = c.now();
-  if (!c.limiters.mailEmail.allow(email, now) || !c.limiters.mailIp.allow(c.ip, now)) throw tooMany();
+  // IP first: an IP that is over budget must not be able to burn a victim's per-email budget.
+  if (!c.limiters.mailIp.allow(c.ip, now) || !c.limiters.mailEmail.allow(email, now)) throw tooMany();
 }
 
 // Fire and forget: the response must not depend on (or reveal) how long SMTP takes.
@@ -56,23 +57,30 @@ const routes = [
       const passErr = checkPassword(password, login);
       if (passErr) throw new HttpError(400, passErr);
       if (b.consent !== true) throw new HttpError(400, 'consent_required');
+      // registerIp is the only bound on login-existence probing, so it is charged before login_taken.
       if (!c.limiters.registerIp.allow(c.ip, now)) throw tooMany();
-      if (!c.limiters.registerEmail.allow(email, now)) throw tooMany();
-      checkMailLimits(c, email);
 
       // Always pay for scrypt, so "email already registered" is not distinguishable by timing.
       const hash = hashPassword(password);
-      // The login check must come before the email lookup: otherwise a taken login would answer
-      // differently depending on whether the email is registered (enumeration oracle).
+      // The login check must come before anything email-based (limiters and lookup): otherwise a taken
+      // login would answer differently depending on the email (enumeration oracle), and taken nicknames
+      // would burn the person's per-email budgets.
       if (c.db.prepare('SELECT 1 FROM users WHERE lower(login) = lower(?)').get(login)) {
         throw new HttpError(409, 'login_taken');
       }
+      if (!c.limiters.registerEmail.allow(email, now)) throw tooMany();
+      checkMailLimits(c, email);
       const byEmail = c.db
         .prepare('SELECT id, login, email, email_verified_at FROM users WHERE lower(email) = ?')
         .get(email);
+      if (byEmail && byEmail.email_verified_at) return { body: GENERIC }; // verified owner: no mail, nothing created
       if (byEmail) {
-        if (!byEmail.email_verified_at) sendVerification(c, byEmail);
-        return { body: GENERIC };
+        // The address is held by an UNVERIFIED account with a different login (the same login was
+        // answered with login_taken above). Re-sending that account's link would hand the owner of the
+        // address a session in an account whose password someone else chose (squatting an email by an
+        // unverified row). Instead the stale row is deleted (its tokens cascade) and the new account is
+        // created below with the requester's password. This must stay synchronous up to the INSERT.
+        c.db.prepare('DELETE FROM users WHERE id = ? AND email_verified_at IS NULL').run(byEmail.id);
       }
       let id;
       try {
