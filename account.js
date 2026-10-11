@@ -119,7 +119,7 @@
   // ---------- mail states ----------
 
   function showCheckMail(email) {
-    var info = h('p', { class: 'ok', role: 'status' });
+    var info = h('p', { role: 'status' });
     var btn = h('button', { type: 'button' }, 'Выслать письмо ещё раз');
     var wait = 0;
     function tick() {
@@ -129,9 +129,14 @@
     btn.addEventListener('click', function () {
       btn.disabled = true;
       api.post('/api/resend-verification', { email: email }).then(function () {
+        info.className = 'ok';
         info.textContent = 'Письмо отправлено повторно.';
         wait = 60; tick();
-      }, function (ex) { info.textContent = errorText(ex); btn.disabled = false; });
+      }, function (ex) {
+        info.className = 'err';
+        info.textContent = errorText(ex);
+        btn.disabled = false;
+      });
     });
     wait = 60; tick();
     show(h('h1', null, 'Проверьте почту'),
@@ -179,14 +184,31 @@
     var pass = field('Новый пароль (минимум 8 символов)', { name: 'password', type: 'password', autocomplete: 'new-password', required: true, minLength: 8, maxLength: 128 });
     var pass2 = field('Новый пароль ещё раз', { name: 'password2', type: 'password', autocomplete: 'new-password', required: true });
     var err = h('p', { class: 'err', role: 'alert' });
-    var form = h('form', null, pass.el, pass2.el, err, h('button', { type: 'submit', class: 'primary' }, 'Сохранить пароль'));
+    // Shown only when the link itself is dead (expired/used): the form cannot succeed any more.
+    var again = h('button', { type: 'button', hidden: true, onclick: function () { showForgot(); } }, 'Запросить новую ссылку');
+    var form = h('form', null, pass.el, pass2.el, err, again, h('button', { type: 'submit', class: 'primary' }, 'Сохранить пароль'));
     bind(form, err, function () {
+      again.hidden = true;
       if (pass.input.value !== pass2.input.value) { err.textContent = 'Пароли не совпадают.'; return null; }
       return api.post('/api/reset-password', { token: token, password: pass.input.value }).then(function () {
         show(h('h1', null, 'Пароль изменён'), h('p', { class: 'ok' }, 'Теперь войдите с новым паролем.'), loginForm());
+      }, function (ex) {
+        if (ex && ex.message === 'token_invalid') again.hidden = false;
+        throw ex;
       });
     });
     show(h('h1', null, 'Новый пароль'), form);
+  }
+
+  // A #verify= / #reset= link that was cut or mangled (e.g. by a mail client wrapping it).
+  function showBrokenLink(kind) {
+    var action = kind === 'verify'
+      ? h('button', { type: 'button', class: 'primary', onclick: function () { showResend(''); } }, 'Выслать новую ссылку')
+      : h('button', { type: 'button', class: 'primary', onclick: function () { showForgot(); } }, 'Сбросить пароль');
+    show(h('h1', null, 'Ссылка недействительна или повреждена'),
+      h('p', { class: 'muted' }, 'Скопируйте ссылку из письма целиком или запросите новую.'),
+      h('div', { class: 'row' }, action),
+      h('div', { class: 'links' }, h('button', { type: 'button', onclick: function () { showGuest('login'); } }, '← Ко входу')));
   }
 
   // ---------- profile ----------
@@ -215,8 +237,8 @@
               h('div', null, shortAgent(s.userAgent), ' ', s.current ? h('span', { class: 'badge' }, 'эта') : null),
               h('div', { class: 'when' }, (s.ip || '—') + ' · вход ' + fmt(s.createdAt) + ' · активность ' + fmt(s.lastSeenAt || s.createdAt))));
           if (!s.current) {
-            row.appendChild(h('button', { type: 'button', onclick: function () {
-              api.del('/api/sessions/' + s.id).then(loadSessions);
+            row.appendChild(h('button', { type: 'button', onclick: function (e) {
+              act(e.currentTarget, function () { return api.del('/api/sessions/' + s.id); }, loadSessions);
             } }, 'Завершить'));
           }
           list.appendChild(row);
@@ -240,12 +262,26 @@
       });
     });
 
+    // One shared error line for the session/logout buttons below the password form.
+    var actErr = h('p', { class: 'err', role: 'alert' });
+    function act(btn, request, onDone) {
+      actErr.textContent = '';
+      btn.disabled = true;
+      request().then(onDone, function (ex) {
+        actErr.textContent = errorText(ex);
+        btn.disabled = false;
+      });
+    }
+
     var revoke = h('button', { type: 'button', onclick: function () {
-      api.post('/api/sessions/revoke-others', {}).then(loadSessions);
+      act(revoke, function () { return api.post('/api/sessions/revoke-others', {}); }, function () {
+        revoke.disabled = false;
+        loadSessions();
+      });
     } }, 'Выйти на всех остальных устройствах');
 
     var logout = h('button', { type: 'button', class: 'primary', onclick: function () {
-      api.post('/api/logout', {}).then(function () { showGuest('login'); });
+      act(logout, function () { return api.post('/api/logout', {}); }, function () { showGuest('login'); });
     } }, 'Выйти');
 
     show(
@@ -254,6 +290,7 @@
       user.role === 'admin' ? h('p', null, h('a', { href: '/map' }, 'Открыть карту (редактор)')) : h('p', null, h('a', { href: '/map' }, 'Открыть карту')),
       h('h2', null, 'Смена пароля'), pwForm,
       h('h2', null, 'Где выполнен вход'), list, h('div', { class: 'row' }, revoke),
+      actErr,
       h('div', { class: 'row' }, logout));
     loadSessions();
   }
@@ -267,6 +304,12 @@
       history.replaceState(null, '', location.pathname + location.search);
       if (m[1] === 'verify') showVerify(m[2]);
       else showReset(m[2]);
+      return;
+    }
+    var broken = /^#(verify|reset)=/.exec(location.hash);
+    if (broken) {
+      history.replaceState(null, '', location.pathname + location.search);
+      showBrokenLink(broken[1]);
       return;
     }
     api.get('/api/me').then(function (me) {
