@@ -306,3 +306,110 @@ test('unblocking restores proposing but does not revive rejected proposals', asy
   assert.equal(repo.rawFeature(ctx.s.db, id).reject_reason, 'Автор заблокирован');
   assert.equal((await post(ctx, '/api/users/99999/unblock-proposals', ctx.s.adminCookie)).status, 404);
 });
+
+// ---------- reports ----------
+
+const report = (ctx, id, cookie, text = 'The marker is on the wrong hill') =>
+  ctx.s.api('POST', `/api/features/${id}/report`, { cookie, body: { text } });
+
+test('a signed-in user reports a published object; duplicates and bad text are refused', async (t) => {
+  const ctx = await setup(t);
+  const id = seedFeature(ctx, { status: 'approved', author: ctx.bob, title: 'Cache' });
+  assert.equal((await report(ctx, id, undefined)).status, 401);
+  const ok = await report(ctx, id, ctx.aliceCookie);
+  assert.equal(ok.status, 201);
+  const dup = await report(ctx, id, ctx.aliceCookie);
+  assert.equal(dup.status, 409);
+  assert.equal(dup.json.error, 'report_exists');
+  assert.equal((await report(ctx, id, ctx.bobCookie)).status, 201, 'another user may report the same object');
+  for (const text of [undefined, '', '   ', 7, 'x'.repeat(501)]) {
+    const r = await ctx.s.api('POST', `/api/features/${id}/report`, { cookie: ctx.s.adminCookie, body: { text } });
+    assert.equal(r.status, 400, JSON.stringify(text));
+  }
+  const queue = await ctx.s.api('GET', '/api/moderation', { cookie: ctx.s.adminCookie });
+  assert.deepEqual(queue.json.reports.map((r) => [r.reporter_login, r.feature_title]).sort(), [['alice', 'Cache'], ['bob', 'Cache']]);
+});
+
+test('a report on a pending object or on a draft map is a 404', async (t) => {
+  const ctx = await setup(t);
+  const pending = seedFeature(ctx, { status: 'pending', author: ctx.bob });
+  const onDraft = repo.insertRow(ctx.s.db, 'features', {
+    map_id: ctx.draftId, category_id: ctx.pointCat, geometry: JSON.stringify({ x: 0, y: 0 }), title: 'Draft object', status: 'approved',
+  });
+  assert.equal((await report(ctx, pending, ctx.aliceCookie)).status, 404);
+  assert.equal((await report(ctx, onDraft, ctx.aliceCookie)).status, 404);
+  assert.equal((await report(ctx, 99999, ctx.aliceCookie)).status, 404);
+});
+
+test('a blocked author cannot report; the limit is 20 open reports per user', async (t) => {
+  const ctx = await setup(t);
+  const ids = [];
+  for (let i = 0; i < 21; i++) ids.push(seedFeature(ctx, { status: 'approved', author: ctx.bob, title: 'F' + i }));
+  for (let i = 0; i < 20; i++) {
+    ctx.s.db.prepare('INSERT INTO reports (feature_id, user_id, text) VALUES (?, ?, ?)').run(ids[i], ctx.alice, 'old');
+  }
+  const over = await report(ctx, ids[20], ctx.aliceCookie);
+  assert.equal(over.status, 409);
+  assert.equal(over.json.error, 'reports_limit');
+  block(ctx, ctx.bob);
+  const blocked = await report(ctx, ids[0], ctx.bobCookie);
+  assert.equal(blocked.status, 403);
+  assert.equal(blocked.json.error, 'proposals_blocked');
+});
+
+test('only the admin resolves a report, and the same user may report again afterwards', async (t) => {
+  const ctx = await setup(t);
+  const id = seedFeature(ctx, { status: 'approved', author: ctx.bob });
+  await report(ctx, id, ctx.aliceCookie);
+  const reportId = ctx.s.db.prepare('SELECT id FROM reports').get().id;
+  assert.equal((await post(ctx, `/api/reports/${reportId}/resolve`, ctx.aliceCookie)).status, 403);
+  assert.equal((await post(ctx, `/api/reports/${reportId}/resolve`, undefined)).status, 401);
+  assert.equal((await post(ctx, `/api/reports/${reportId}/resolve`, ctx.s.adminCookie)).status, 200);
+  assert.equal((await post(ctx, `/api/reports/${reportId}/resolve`, ctx.s.adminCookie)).status, 409);
+  assert.equal((await post(ctx, '/api/reports/99999/resolve', ctx.s.adminCookie)).status, 404);
+  const queue = await ctx.s.api('GET', '/api/moderation', { cookie: ctx.s.adminCookie });
+  assert.deepEqual(queue.json.reports, []);
+  assert.equal((await report(ctx, id, ctx.aliceCookie)).status, 201, 'a resolved report no longer blocks a new one');
+});
+
+test('deleting an object or a user removes the reports; published objects survive their author', async (t) => {
+  const ctx = await setup(t);
+  const id = seedFeature(ctx, { status: 'approved', author: ctx.bob, title: 'Survives' });
+  const other = seedFeature(ctx, { status: 'approved', author: ctx.bob, title: 'Deleted' });
+  await report(ctx, id, ctx.aliceCookie);
+  await report(ctx, other, ctx.aliceCookie);
+  await ctx.s.api('DELETE', `/api/features/${other}`, { cookie: ctx.s.adminCookie });
+  assert.equal(ctx.s.db.prepare('SELECT COUNT(*) AS n FROM reports WHERE feature_id = ?').get(other).n, 0);
+  ctx.s.db.prepare('DELETE FROM users WHERE id = ?').run(ctx.alice);
+  assert.equal(ctx.s.db.prepare('SELECT COUNT(*) AS n FROM reports').get().n, 0, 'the reporter is gone, so are their reports');
+  ctx.s.db.prepare('DELETE FROM users WHERE id = ?').run(ctx.bob);
+  const row = repo.rawFeature(ctx.s.db, id);
+  assert.equal(row.title, 'Survives');
+  assert.equal(row.author_id, null);
+});
+
+// ---------- cleanup ----------
+
+test('cleanup deletes old rejected proposals without photos and keeps everything else', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(SCHEMA);
+  migrate(db);
+  db.exec("INSERT INTO maps (slug, title, published) VALUES ('m', 'M', 1)");
+  db.exec("INSERT INTO categories (map_id, name, shape) VALUES (1, 'C', 'point')");
+  const now = Date.UTC(2026, 9, 11, 12, 0, 0);
+  const day = 24 * 60 * 60 * 1000;
+  const stamp = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+  const add = (title, status, reason, reviewedAt) => Number(db.prepare(
+    `INSERT INTO features (map_id, category_id, geometry, title, status, reject_reason, reviewed_at)
+     VALUES (1, 1, '{"x":0,"y":0}', ?, ?, ?, ?)`).run(title, status, reason, reviewedAt).lastInsertRowid);
+  add('old rejected', 'pending', 'dup', stamp(now - 31 * day));
+  add('fresh rejected', 'pending', 'dup', stamp(now - 5 * day));
+  add('open pending', 'pending', null, null);
+  add('old published', 'approved', null, stamp(now - 90 * day));
+  const withPhoto = add('old rejected with photo', 'pending', 'dup', stamp(now - 40 * day));
+  db.prepare("INSERT INTO feature_images (feature_id, path) VALUES (?, 'features/a.jpg')").run(withPhoto);
+  cleanup(db, now);
+  const titles = db.prepare('SELECT title FROM features ORDER BY id').all().map((r) => r.title);
+  assert.deepEqual(titles, ['fresh rejected', 'open pending', 'old published', 'old rejected with photo']);
+  db.close();
+});

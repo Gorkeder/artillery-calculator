@@ -6,6 +6,8 @@ const repo = require('../repo');
 
 const MAX_REASON = 200;
 const BLOCK_REJECT_REASON = 'Автор заблокирован';
+const MAX_REPORT_TEXT = 500;
+const MAX_OPEN_REPORTS = 20;
 
 const sqlTime = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
 
@@ -125,6 +127,39 @@ module.exports = [
         .prepare('UPDATE users SET proposals_blocked_at = NULL, proposals_block_reason = NULL WHERE id = ?')
         .run(user.id);
       return { body: { ok: true } };
+    },
+  },
+  {
+    method: 'POST',
+    pattern: '/api/features/:id/report',
+    handler: async (c) => {
+      if (!c.user) throw new HttpError(401, 'login required');
+      if (!can(c.user, 'report:create')) throw new HttpError(403, 'proposals_blocked');
+      if (!c.limiters.proposalsWrite.allow('u:' + c.user.id, c.now())) {
+        throw new HttpError(429, 'too many requests, try again later');
+      }
+      const id = idParam(c);
+      const row = repo.rawFeature(c.db, id);
+      // Only what the public sees can be reported; anything else looks like a missing object.
+      const map = row ? repo.getMapById(c.db, row.map_id) : null;
+      if (!row || row.status !== 'approved' || !map || (!map.published && c.user.role !== 'admin')) {
+        throw new HttpError(404, 'feature not found');
+      }
+      const body = await readJson(c.req);
+      const text = typeof body.text === 'string' ? body.text.trim() : '';
+      if (!text || text.length > MAX_REPORT_TEXT) throw new HttpError(400, 'text must be 1..500 characters');
+      const open = c.db
+        .prepare('SELECT 1 FROM reports WHERE feature_id = ? AND user_id = ? AND resolved_at IS NULL')
+        .get(id, c.user.id);
+      if (open) throw new HttpError(409, 'report_exists');
+      const n = c.db
+        .prepare('SELECT COUNT(*) AS n FROM reports WHERE user_id = ? AND resolved_at IS NULL')
+        .get(c.user.id).n;
+      if (n >= MAX_OPEN_REPORTS) throw new HttpError(409, 'reports_limit');
+      c.db
+        .prepare('INSERT INTO reports (feature_id, user_id, text, created_at) VALUES (?, ?, ?, ?)')
+        .run(id, c.user.id, text, sqlTime(c.now()));
+      return { status: 201, body: { ok: true } };
     },
   },
   {

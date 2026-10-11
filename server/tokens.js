@@ -62,6 +62,14 @@ function cleanup(db, nowMs) {
          WHERE t.user_id = users.id AND t.kind = 'verify_email' AND t.used_at IS NULL AND t.expires_at > ?
        )`,
   ).run(dayAgo, nowMs);
+  // Rejected proposals nobody deleted: 30 days after the decision. Ones with photos stay: their files
+  // live outside the database and this function has no uploads directory to remove them from.
+  db.prepare(
+    `DELETE FROM features
+     WHERE status = 'pending' AND reject_reason IS NOT NULL
+       AND reviewed_at IS NOT NULL AND reviewed_at < datetime(? / 1000, 'unixepoch')
+       AND NOT EXISTS (SELECT 1 FROM feature_images fi WHERE fi.feature_id = features.id)`,
+  ).run(nowMs - 30 * 24 * HOUR);
 }
 
 module.exports = { issueToken, peekToken, consumeToken, revokeTokens, cleanup };
