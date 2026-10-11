@@ -62,7 +62,7 @@ test('an expired verification token is refused', async (t) => {
 });
 
 test('validation errors carry stable codes', async (t) => {
-  const s = await startTestServer({ limiters: { registerIp: createRateLimiter({ max: 100, windowMs: 60000 }) } });
+  const s = await startTestServer();
   t.after(() => s.cleanup());
   const cases = [
     [{ login: 'ab' }, 'login_invalid'],
@@ -108,12 +108,25 @@ test('a taken login (any case) is reported; a taken email is not revealed', asyn
   assert.equal(s.db.prepare("SELECT COUNT(*) AS n FROM users WHERE login = 'another'").get().n, 0);
 });
 
+test('a taken login answers 409 identically whether or not the email is registered', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  await register(s);
+  const withKnownEmail = await register(s, { login: 'newbie', email: 'newbie@example.com' });
+  const withFreshEmail = await register(s, { login: 'newbie', email: 'fresh@example.com' });
+  assert.equal(withKnownEmail.status, 409);
+  assert.equal(withFreshEmail.status, 409);
+  assert.equal(withKnownEmail.json.error, 'login_taken');
+  assert.deepEqual(withKnownEmail.json, withFreshEmail.json);
+  assert.equal(s.mailer.sent.length, 1);
+});
+
 test('registering again with the email of an unverified account re-sends the link', async (t) => {
   const s = await startTestServer();
   t.after(() => s.cleanup());
   await register(s);
   const first = s.lastToken('verify');
-  const r = await register(s, { login: 'newbie' });
+  const r = await register(s, { login: 'newbie2' });
   assert.equal(r.status, 200);
   assert.equal(s.mailer.sent.length, 2);
   assert.notEqual(s.lastToken('verify'), first);
@@ -136,7 +149,7 @@ test('registration is rate limited per IP and per email', async (t) => {
   assert.equal((await register(s, { login: 'user1', email: 'user1@example.com' })).status, 200);
   assert.equal((await register(s, { login: 'user2', email: 'user2@example.com' })).status, 200);
   assert.equal((await register(s, { login: 'user3', email: 'user3@example.com' })).status, 429);
-  const s2 = await startTestServer();
+  const s2 = await startTestServer({ limiters: { mailEmail: createRateLimiter({ max: 100, windowMs: 60000 }) } });
   t.after(() => s2.cleanup());
   for (let i = 0; i < 3; i++) {
     assert.equal((await register(s2, { login: 'same' + i, email: 'same@example.com' })).status, 200);

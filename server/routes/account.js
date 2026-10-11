@@ -45,7 +45,6 @@ const routes = [
     handler: async (c) => {
       requireMail(c);
       const now = c.now();
-      if (!c.limiters.registerIp.allow(c.ip, now)) throw tooMany();
       const b = await readJson(c.req);
       if (typeof b.website === 'string' && b.website !== '') return { body: GENERIC }; // honeypot
       const login = str(b.login);
@@ -57,20 +56,23 @@ const routes = [
       const passErr = checkPassword(password, login);
       if (passErr) throw new HttpError(400, passErr);
       if (b.consent !== true) throw new HttpError(400, 'consent_required');
+      if (!c.limiters.registerIp.allow(c.ip, now)) throw tooMany();
       if (!c.limiters.registerEmail.allow(email, now)) throw tooMany();
       checkMailLimits(c, email);
 
       // Always pay for scrypt, so "email already registered" is not distinguishable by timing.
       const hash = hashPassword(password);
+      // The login check must come before the email lookup: otherwise a taken login would answer
+      // differently depending on whether the email is registered (enumeration oracle).
+      if (c.db.prepare('SELECT 1 FROM users WHERE lower(login) = lower(?)').get(login)) {
+        throw new HttpError(409, 'login_taken');
+      }
       const byEmail = c.db
         .prepare('SELECT id, login, email, email_verified_at FROM users WHERE lower(email) = ?')
         .get(email);
       if (byEmail) {
         if (!byEmail.email_verified_at) sendVerification(c, byEmail);
         return { body: GENERIC };
-      }
-      if (c.db.prepare('SELECT 1 FROM users WHERE lower(login) = lower(?)').get(login)) {
-        throw new HttpError(409, 'login_taken');
       }
       let id;
       try {
@@ -82,6 +84,8 @@ const routes = [
           .run(login, hash, email);
         id = Number(r.lastInsertRowid);
       } catch (err) {
+        // Handler must stay synchronous between the lookups and this INSERT; an email-index violation
+        // would also map to login_taken here, which would reopen the enumeration oracle if it went async.
         if (/UNIQUE/i.test(String(err.message))) throw new HttpError(409, 'login_taken');
         throw err;
       }
@@ -100,6 +104,7 @@ const routes = [
         .prepare("UPDATE users SET email_verified_at = datetime('now') WHERE id = ? AND email_verified_at IS NULL")
         .run(userId);
       const user = c.db.prepare('SELECT id, login, role FROM users WHERE id = ?').get(userId);
+      if (!user) throw new HttpError(400, 'token_invalid');
       const session = createSession(c.db, userId, c.now(), undefined, c.clientMeta);
       c.headers['Set-Cookie'] = sessionCookie(session, { secure: c.cookieSecure });
       return { body: meBody(c.db, user) };
