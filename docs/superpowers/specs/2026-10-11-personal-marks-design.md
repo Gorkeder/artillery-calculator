@@ -78,11 +78,11 @@ CREATE INDEX idx_user_marks_user_map ON user_marks(user_id, map_id);
 | Вершин у полигона/линии | 100 (поверх `MAX_POINTS = 2000` у `validateGeometry`) | сервер → 400 |
 | Название | до 80 символов | сервер |
 | Описание | до 1000 символов | сервер |
-| Частота записи | 120 запросов записи за 10 минут на пользователя | лимитер приложения, значения в `config.js` рядом с существующими лимитами |
+| Частота записи | 120 запросов записи за 10 минут на пользователя | лимитер приложения `marksWrite` в `app.js` рядом с существующими |
 
 ## API
 
-Все маршруты требуют сессию (иначе 401). Ответы `GET` — с `Cache-Control: no-store`.
+Все маршруты требуют сессию (иначе 401). Все ответы API уже идут с `Cache-Control: no-store` (`sendJson`), отдельной настройки не требуется.
 Запись требует `X-Requested-With`, как все не-GET запросы.
 
 | Запрос | Тело | Поведение |
@@ -90,7 +90,7 @@ CREATE INDEX idx_user_marks_user_map ON user_marks(user_id, map_id);
 | `GET /api/my/marks?map=<slug>` | — | Метки текущего пользователя на опубликованной карте. Нет карты → 404 |
 | `POST /api/my/marks` | `{map, shape, geometry, title?, description?, color?, icon?}` | Создаёт, 201 + метка. Лимиты выше |
 | `PATCH /api/my/marks/:id` | любые из `geometry, title, description, color, icon` | Обновляет, меняет `updated_at`. Форма не меняется |
-| `DELETE /api/my/marks/:id` | — | Удаляет, 204 |
+| `DELETE /api/my/marks/:id` | — | Удаляет, 200 `{ok: true}` (как остальные DELETE) |
 
 Метка в ответе: `{id, map, shape, geometry, title, description, color, icon, created_at, updated_at}`.
 
@@ -106,7 +106,8 @@ CREATE INDEX idx_user_marks_user_map ON user_marks(user_id, map_id);
 Чужая или несуществующая метка в `PATCH`/`DELETE` отвечает одинаково: **404**, а не 403, чтобы
 нельзя было перебирать id. Проверок `role` вне `permissions.js` не добавляется.
 
-`GET /me` (`server/me.js`): в `can` добавляется `marks: true` для вошедшего, `false` для гостя.
+`GET /api/me` (`server/me.js`): в объект `can` добавляется `marks: true` для вошедшего, `false` для гостя
+(ключ добавляется в `capabilities()` из `permissions.js`).
 
 ## Интерфейс
 
