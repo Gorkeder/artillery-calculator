@@ -320,9 +320,15 @@
     return loadScript(src).catch(function () { /* added in a later task; tolerated */ });
   }
 
+  function wantsEditor() {
+    return !!state.me.can.feature && window.matchMedia('(min-width: 900px)').matches;
+  }
+
+  // Geoman patches L.Map/L.Layer through init hooks, so it must be loaded BEFORE the map is created.
+  var geomanLoaded = false;
+
   function startEditor() {
-    return loadScript('/vendor/geoman/leaflet-geoman.min.js')
-      .then(function () { return loadScript('/map-editor.js'); })
+    return loadScript('/map-editor.js')
       .then(function () { return optionalScript('/map-editor-dialogs.js'); })
       .then(function () { window.MapEditor.start(window.MapViewer); });
   }
@@ -355,7 +361,7 @@
 
   // ---------- init ----------
 
-  function init() {
+  function createMap() {
     leaflet = L.map('map', {
       crs: L.CRS.Simple, minZoom: -5, maxZoom: 3, zoomSnap: 0.25, zoomDelta: 0.5,
       attributionControl: false, zoomControl: true,
@@ -363,6 +369,9 @@
     leaflet.on('popupclose', function () {
       if (state.openId !== null) { state.openId = null; updateUrl(); }
     });
+  }
+
+  function init() {
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeCard(); });
     $('map-select').addEventListener('change', function (e) { loadMap(e.target.value); });
     $('layers-btn').addEventListener('click', function () { $('side').classList.toggle('open'); });
@@ -371,7 +380,13 @@
     return api.get('/api/me')
       .then(function (me) { state.me = me; })
       .catch(function () { /* stay anonymous */ })
-      .then(function () { setupAuth(); return reloadMaps(); })
+      .then(function () {
+        if (!wantsEditor()) return null;
+        return loadScript('/vendor/geoman/leaflet-geoman.min.js').then(
+          function () { geomanLoaded = true; },
+          function () { /* editor unavailable; the viewer still works */ });
+      })
+      .then(function () { createMap(); setupAuth(); return reloadMaps(); })
       .then(function () {
         var q = new URLSearchParams(location.search);
         var wanted = q.get('m');
@@ -387,7 +402,7 @@
       })
       .catch(function () { notice('Не удалось загрузить карту. Обновите страницу.'); })
       .then(function () {
-        if (state.me.can.feature && window.matchMedia('(min-width: 900px)').matches) {
+        if (geomanLoaded && wantsEditor()) {
           return startEditor().catch(function () { notice('Не удалось загрузить редактор.'); });
         }
         return null;
