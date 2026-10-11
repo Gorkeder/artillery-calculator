@@ -175,5 +175,107 @@
     render();
   }
 
-  window.MapEditorDialogs = { categories: categories, maps: maps };
+  // ---------- moderation ----------
+
+  function moderation() {
+    var viewer = V();
+    var data = { proposals: [], reports: [], blocked: [] };
+    var tab = 'proposals';
+    var TITLES = { proposals: 'Предложения', reports: 'Жалобы', blocked: 'Заблокированные' };
+    var tabs = h('div', { class: 'row' });
+    var list = h('div', { class: 'dlg-list' });
+    var dlg;
+
+    function reload() {
+      return api.get('/api/moderation').then(function (d) {
+        data = d;
+        E().setModerationCount(d.proposals.length + d.reports.length);
+        render();
+      }, function (err) {
+        list.textContent = 'Ошибка: ' + err.message;
+      });
+    }
+
+    // Runs a moderation call with the editor's status line, then refreshes the queue (and the map).
+    function act(fn, reloadMap) {
+      return E().save(fn).then(function (res) {
+        if (!res) return;
+        var st = viewer.state();
+        if (reloadMap && st.map) viewer.loadMap(st.map.slug, { keepView: true });
+        reload();
+      });
+    }
+
+    function showOnMap(slug, featureId) {
+      dlg.close();
+      var st = viewer.state();
+      var go = st.map && st.map.slug === slug ? Promise.resolve() : viewer.loadMap(slug);
+      go.then(function () { viewer.focusFeature(featureId); });
+    }
+
+    function blockAuthor(userId, login) {
+      var why = window.prompt('Заблокировать «' + login + '» для предложений и жалоб. Причина (необязательно):', '');
+      if (why === null) return;
+      act(function () { return api.post('/api/users/' + userId + '/block-proposals', { reason: why.trim() }); }, true);
+    }
+
+    function proposalRow(p) {
+      var reason = h('input', { type: 'text', maxLength: 200, placeholder: 'Причина отклонения' });
+      return h('div', { class: 'dlg-row mod-row' },
+        h('div', { class: 'mod-info' },
+          h('strong', null, p.title || 'Без названия'),
+          h('div', { class: 'hint' }, p.category_name + ' · ' + p.map_title + ' · ' + (p.author_login || 'аккаунт удалён')),
+          p.description ? h('div', { class: 'mod-text' }, p.description) : null),
+        reason,
+        h('button', { type: 'button', onclick: function () { showOnMap(p.map_slug, p.id); } }, 'Показать'),
+        h('button', { type: 'button', class: 'primary', onclick: function () {
+          act(function () { return api.post('/api/features/' + p.id + '/approve', {}); }, true);
+        } }, 'Одобрить'),
+        h('button', { type: 'button', class: 'danger', onclick: function () {
+          if (!reason.value.trim()) { reason.focus(); return; }
+          act(function () { return api.post('/api/features/' + p.id + '/reject', { reason: reason.value.trim() }); }, true);
+        } }, 'Отклонить'),
+        p.author_id ? h('button', { type: 'button', class: 'danger', onclick: function () { blockAuthor(p.author_id, p.author_login); } },
+          'Заблокировать автора') : null);
+    }
+
+    function reportRow(r) {
+      return h('div', { class: 'dlg-row mod-row' },
+        h('div', { class: 'mod-info' },
+          h('strong', null, r.feature_title || 'Без названия'),
+          h('div', { class: 'hint' }, 'от ' + r.reporter_login + ' · ' + r.created_at),
+          h('div', { class: 'mod-text' }, r.text)),
+        h('button', { type: 'button', onclick: function () { showOnMap(r.map_slug, r.feature_id); } }, 'Показать'),
+        h('button', { type: 'button', class: 'primary', onclick: function () {
+          act(function () { return api.post('/api/reports/' + r.id + '/resolve', {}); }, false);
+        } }, 'Решено'));
+    }
+
+    function blockedRow(b) {
+      return h('div', { class: 'dlg-row mod-row' },
+        h('div', { class: 'mod-info' },
+          h('strong', null, b.login),
+          h('div', { class: 'hint' }, b.reason ? 'Причина: ' + b.reason : 'Без причины')),
+        h('button', { type: 'button', onclick: function () {
+          act(function () { return api.post('/api/users/' + b.id + '/unblock-proposals', {}); }, false);
+        } }, 'Разблокировать'));
+    }
+
+    function render() {
+      tabs.textContent = '';
+      Object.keys(TITLES).forEach(function (k) {
+        tabs.appendChild(h('button', { type: 'button', class: tab === k ? 'on' : '', onclick: function () { tab = k; render(); } },
+          TITLES[k] + ' (' + data[k].length + ')'));
+      });
+      list.textContent = '';
+      var rowFor = { proposals: proposalRow, reports: reportRow, blocked: blockedRow }[tab];
+      data[tab].forEach(function (item) { list.appendChild(rowFor(item)); });
+      if (!data[tab].length) list.appendChild(h('p', null, 'Пока пусто.'));
+    }
+
+    dlg = openDialog('Модерация', h('div', null, tabs, list));
+    reload();
+  }
+
+  window.MapEditorDialogs = { categories: categories, maps: maps, moderation: moderation };
 })();

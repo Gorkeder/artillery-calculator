@@ -147,6 +147,9 @@ body.editing #props-slot { display: block; }
 .report-form { margin-top: 6px; }
 .report-form textarea { width: 100%; }
 .ok { color: #8fbf6a; margin: 6px 0; }
+.mod-row { align-items: flex-start; flex-wrap: wrap; }
+.mod-info { flex: 1 1 260px; min-width: 0; }
+.mod-text { white-space: pre-wrap; margin-top: 4px; }
 
 @media (max-width: 720px) {
   .only-narrow { display: inline-block; }
