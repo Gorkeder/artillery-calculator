@@ -1,7 +1,8 @@
 'use strict';
 
 const { HttpError, sendJson } = require('./http-util');
-const { parseCookies, getSessionUser, createRateLimiter } = require('./auth');
+const { parseCookies, getSessionUser, touchSession, createRateLimiter } = require('./auth');
+const { createUnconfiguredMailer } = require('./mailer');
 
 const ROUTE_MODULES = [require('./routes/auth'), require('./routes/content'), require('./routes/images')];
 
@@ -22,7 +23,19 @@ function clientIp(req) {
 
 function createApp(opts) {
   const { db, uploadsDir, cookieSecure = true, now = Date.now } = opts;
-  const loginLimiter = opts.loginLimiter || createRateLimiter({ max: 10, windowMs: 10 * 60 * 1000 });
+  const mailer = opts.mailer || createUnconfiguredMailer();
+  const publicUrl = (opts.publicUrl || 'https://anoma-wiki.ru').replace(/\/+$/, '');
+  const MIN = 60 * 1000;
+  const HOUR = 60 * MIN;
+  const limiters = {
+    login: opts.loginLimiter || createRateLimiter({ max: 10, windowMs: 10 * MIN }),
+    loginAccount: createRateLimiter({ max: 10, windowMs: 10 * MIN }),
+    registerIp: createRateLimiter({ max: 5, windowMs: HOUR }),
+    registerEmail: createRateLimiter({ max: 3, windowMs: 24 * HOUR }),
+    mailIp: createRateLimiter({ max: 10, windowMs: HOUR }),
+    mailEmail: createRateLimiter({ max: 3, windowMs: HOUR }),
+    ...(opts.limiters || {}),
+  };
   const routes = ROUTE_MODULES.flat().map((r) => ({ ...r, ...compile(r.pattern) }));
 
   return async function app(req, res) {
@@ -49,9 +62,13 @@ function createApp(opts) {
       if (!route) throw new HttpError(404, 'not found');
       const token = parseCookies(req.headers.cookie).sid || null;
       const user = getSessionUser(db, token, now());
+      if (user) touchSession(db, token, now());
+      const ip = clientIp(req);
       const c = {
-        db, uploadsDir, cookieSecure, loginLimiter, now, req, res,
-        params, query: url.searchParams, user, token, headers: {}, ip: clientIp(req),
+        db, uploadsDir, cookieSecure, now, req, res,
+        loginLimiter: limiters.login, limiters, mailer, publicUrl,
+        params, query: url.searchParams, user, token, headers: {}, ip,
+        clientMeta: { ip, userAgent: String(req.headers['user-agent'] || '').slice(0, 200) },
       };
       const result = await route.handler(c);
       sendJson(res, result.status || 200, result.body === undefined ? { ok: true } : result.body, c.headers);

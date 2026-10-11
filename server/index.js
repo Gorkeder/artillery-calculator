@@ -7,13 +7,23 @@ const { loadConfig } = require('./config');
 const { openDb } = require('./db');
 const { createApp } = require('./app');
 const { createStaticHandler } = require('./static');
+const { createMailer } = require('./mailer');
+const { cleanup } = require('./tokens');
 
 const cfg = loadConfig();
 fs.mkdirSync(path.dirname(cfg.dbFile), { recursive: true });
 fs.mkdirSync(cfg.uploadsDir, { recursive: true });
 
 const db = openDb(cfg.dbFile);
-const app = createApp({ db, uploadsDir: cfg.uploadsDir, cookieSecure: cfg.cookieSecure });
+const mailer = createMailer(cfg);
+if (!mailer.configured) {
+  console.warn('anoma-api: MAIL_MODE is not set, registration and password reset are disabled (503)');
+}
+const app = createApp({
+  db, uploadsDir: cfg.uploadsDir, cookieSecure: cfg.cookieSecure, mailer, publicUrl: cfg.publicUrl,
+});
+cleanup(db, Date.now());
+setInterval(() => cleanup(db, Date.now()), 60 * 60 * 1000).unref();
 const serveStatic = cfg.devStatic
   ? createStaticHandler({ root: cfg.devStatic, uploadsDir: cfg.uploadsDir })
   : null;

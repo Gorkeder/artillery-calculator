@@ -7,17 +7,22 @@ const path = require('node:path');
 const { openDb } = require('../db');
 const { createApp } = require('../app');
 const { createSession, createUser } = require('../auth');
+const { createMemoryMailer } = require('../mailer');
 
 async function startTestServer(opts = {}) {
   const db = openDb(':memory:');
   const uploadsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'anoma-up-'));
   let clock = opts.now || Date.now();
+  const mailer = opts.mailer || createMemoryMailer();
   const app = createApp({
     db,
     uploadsDir,
     cookieSecure: false,
     now: () => clock,
     loginLimiter: opts.loginLimiter,
+    limiters: opts.limiters,
+    mailer: opts.noMailer ? undefined : mailer,
+    publicUrl: 'https://test.local',
   });
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -49,6 +54,16 @@ async function startTestServer(opts = {}) {
     uploadsDir,
     adminId,
     adminCookie,
+    mailer,
+    // Newest token of the given kind ('verify' | 'reset') found in the memory mailbox.
+    lastToken(kind) {
+      const re = new RegExp('#' + kind + '=([0-9a-f]{64})');
+      for (let i = (mailer.sent || []).length - 1; i >= 0; i--) {
+        const m = re.exec(mailer.sent[i].text);
+        if (m) return m[1];
+      }
+      return null;
+    },
     setNow(ms) { clock = ms; },
     async cleanup() {
       server.closeAllConnections();
