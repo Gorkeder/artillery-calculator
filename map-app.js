@@ -20,6 +20,7 @@
     openMark: null,
     mode: 'shared',
     wantedMark: null,
+    drawTool: false,
   };
   var hooks = { onLayer: null, afterCategories: null, afterLoad: null };
   var listeners = { mapLoaded: [] };
@@ -81,6 +82,8 @@
   }
 
   function defaultClick(id, e) {
+    // While a drawing tool is active a click on an existing object belongs to the drawing.
+    if (state.drawTool) return false;
     openFeature(id, e && e.latlng);
     return true;
   }
@@ -465,6 +468,8 @@
     mode: function () { return state.mode; },
     setMode: function (m) { state.mode = m; },
     onMapLoaded: function (fn) { listeners.mapLoaded.push(fn); },
+    drawTool: function () { return state.drawTool; },
+    setDrawTool: function (on) { state.drawTool = !!on; },
   };
 
   init();

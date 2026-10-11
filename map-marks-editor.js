@@ -60,6 +60,7 @@
   }
 
   function updateToolbar() {
+    V.setDrawTool(ed.tool !== 'select');
     Object.keys(els.toolBtns).forEach(function (k) {
       els.toolBtns[k].classList.toggle('on', ed.tool === k);
     });
@@ -120,6 +121,10 @@
   }
 
   function createMark(shape, geometry) {
+    if (!M.available()) {
+      status('Личные метки доступны только на опубликованных картах', 'error');
+      return;
+    }
     var slug = V.state().map.slug;
     var body = { map: slug, shape: shape, geometry: geometry, title: '' };
     if (shape === 'point') body.icon = 'pin';
@@ -151,7 +156,8 @@
   // ---------- selection and geometry editing ----------
 
   function onMarkClick(id, e) {
-    if (!active()) return M.open(id, e && e.latlng);
+    // Another mode's object: open its card, unless a drawing tool wants this click.
+    if (!active()) return V.drawTool() ? false : M.open(id, e && e.latlng);
     if (ed.drawing || ed.tool === 'point') return false;
     if (ed.tool === 'select') { select(id); return true; }
     return false;

@@ -142,7 +142,8 @@
     var map = V.state().map;
     marks = [];
     render();
-    if (!map) return Promise.resolve();
+    // The server only keeps marks on published maps (an admin may open a draft).
+    if (!map || !map.published) return Promise.resolve();
     var slug = map.slug;
     return api.get('/api/my/marks?map=' + encodeURIComponent(slug)).then(function (list) {
       var current = V.state().map;
@@ -188,6 +189,7 @@
     setClickHandler: function (fn) { clickHandler = fn || null; },
     setMark: setMark,
     dropMark: dropMark,
+    available: function () { var m = V.state().map; return !!(m && m.published); },
     open: open,
     focus: focus,
     show: show,

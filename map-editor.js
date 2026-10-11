@@ -62,6 +62,7 @@
   }
 
   function updateToolbar() {
+    V.setDrawTool(ed.tool !== 'select');
     Object.keys(els.toolBtns).forEach(function (k) {
       els.toolBtns[k].classList.toggle('on', ed.tool === k);
     });
