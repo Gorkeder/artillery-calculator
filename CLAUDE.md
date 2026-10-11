@@ -37,6 +37,10 @@ for them.
   в режиме relay (`127.0.0.1:25`, без AUTH); SPF, DKIM, DMARC в DNS у Beget, PTR в Virtualizor. Проверено:
   `dkim/spf/dmarc=pass`. SMTP Beget оставлен как запасной вариант (`/etc/anoma/api.env.beget.bak`). Gmail пока
   кладёт первые письма в «Спам» (у нового IP нет репутации). См. `RELEASE.md`.
+- **Личные метки пользователей (этап C)** (ветка `personal-marks`, ещё не влита в `master`): точки/полигоны/линии на
+  карте, видны только автору; таблица `user_marks` (миграция 3), API `/api/my/marks`, слой и фильтр «Мои метки»,
+  редактор на ПК, у админа переключатель «Общие / Мои метки»; подтверждение почты больше не открывает сессию.
+  Спек и план — `docs/superpowers/specs|plans/2026-10-11-personal-marks*`, эксплуатация — `RELEASE.md`.
 
 ### Не сделано / ждёт решения
 - Ветки `map-editor-spec` и `user-accounts` уже влиты в `master` (`git branch --merged`); влить ветку
@@ -49,8 +53,10 @@ for them.
   Сменить пароль: `cli.js set-password <login>` (см. `RELEASE.md`).
 - Перед анонсом аккаунтов руками пройти страницы на телефоне и ПК (регистрация, письмо, `/account` на 375 px,
   возврат на `/map`) и показать `/privacy` владельцу/юристу.
-- Решить до этапа C, входить ли автоматически после подтверждения почты (захват чужой почты, см. `RELEASE.md`).
-- Этап C: личные метки; этап B: предложения точек с модерацией; смена почты, самоудаление аккаунта, соцсети, 2FA.
+- Перед анонсом личных меток руками пройти чек-лист из плана `2026-10-11-personal-marks.md` (Task 7: вершины,
+  Esc/Delete, 375 px) и показать абзац про метки в `/privacy` владельцу/юристу; влить ветку `personal-marks`
+  (после бэкапа БД: пуш в `master` деплоит миграцию 3).
+- Этап B: предложения точек с модерацией; смена почты, самоудаление аккаунта, соцсети, 2FA.
 - Не вошло в v1 карты: отмена/повтор (Ctrl+Z), история изменений, импорт/экспорт, свои иконки, видео, массовое выделение.
 - Баннер cookie (152-ФЗ) не сделан.
 
@@ -75,6 +81,8 @@ for them.
   `map-geo.js` (pure geometry helpers, tested in `tools/map-geo.test.js`), `map-icons.js`,
   `map-app.js` (viewer), `map-editor.js` + `map-editor-dialogs.js` (editor), styles in `map-app.css`.
   Leaflet and Leaflet-Geoman are vendored in `vendor/` (no CDN). Geoman must load before `L.map()`.
+  Личные метки: `map-marks.js` (слой, фильтр, карточка) и `map-marks-editor.js` (рисование и правка, только ПК);
+  сервер — `server/routes/marks.js`, таблица `user_marks`.
 - `server/` — Node 22+ API (`node:http` + `node:sqlite`, no npm deps) for maps, categories, features,
   photos, admin login and user accounts (`mailer.js` — own SMTP client (TLS + AUTH, or local relay mode on loopback)/log/memory mail, `tokens.js` — one-time
   verify/reset tokens, `routes/account.js` — registration, verification, reset, sessions). Deployed separately to `/opt/anoma-api`; **never published** by the static
