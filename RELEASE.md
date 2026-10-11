@@ -177,7 +177,7 @@ node tools/decrypt-map.js      # map.enc -> map.js
 
 **Создать администратора** (пароль не попадает в историю команд и репозиторий):
 
-    read -rs ANOMA_PASSWORD && export ANOMA_PASSWORD
+    IFS= read -rs ANOMA_PASSWORD && export ANOMA_PASSWORD
     sudo -u anoma --preserve-env=ANOMA_PASSWORD env ANOMA_DB=/var/lib/anoma/db/anoma.db \
       ANOMA_UPLOADS=/var/lib/anoma/uploads node /opt/anoma-api/cli.js create-admin <login>
     unset ANOMA_PASSWORD
@@ -230,15 +230,21 @@ node tools/decrypt-map.js      # map.enc -> map.js
    `PUBLIC_URL=https://anoma-wiki.ru` уже прописан в юните. **Пароль вводит владелец сам на сервере**,
    не в чате и не в команде. Команда ниже спрашивает пароль скрытым вводом (в историю оболочки и в список
    процессов он не попадает: `read` и `printf` — встроенные команды), пишет весь файл с правами `0600`,
-   владелец `root:root`, и заменяет его атомарно. Кавычки и обратные слэши в пароле экранируются под
+   владелец `root:root`, и заменяет его атомарно; при пустом пароле команда завершается с сообщением и ничего не создаёт. Кавычки и обратные слэши в пароле экранируются под
    разбор `EnvironmentFile` в systemd. Команда — **одна строка**, копировать целиком; значения из
    `/etc/anoma/api.env` перекрывают строки `Environment=` юнита независимо от порядка строк в юните:
 
-       sudo bash -c 'set -eu; umask 077; f=/etc/anoma/api.env; mkdir -p /etc/anoma; IFS= read -rsp "SMTP password: " P; echo; bs=$(printf "\\\\"); q="\""; P=${P//"$bs"/"$bs$bs"}; P=${P//"$q"/"$bs$q"}; rm -f "$f.new"; printf "MAIL_MODE=smtp\nSMTP_HOST=smtp.beget.com\nSMTP_PORT=465\nSMTP_USER=noreply@anoma-wiki.ru\nMAIL_FROM=noreply@anoma-wiki.ru\n" > "$f.new"; printf "SMTP_PASS=\"%s\"\n" "$P" >> "$f.new"; chown root:root "$f.new"; chmod 600 "$f.new"; mv "$f.new" "$f"'
+       sudo bash -c 'set -eu; umask 077; f=/etc/anoma/api.env; IFS= read -rsp "SMTP password: " P; echo; if [ -z "$P" ]; then echo "Пустой пароль, ничего не записано" >&2; exit 1; fi; mkdir -p /etc/anoma; bs=$(printf "\\\\"); q="\""; P=${P//"$bs"/"$bs$bs"}; P=${P//"$q"/"$bs$q"}; rm -f "$f.new"; printf "MAIL_MODE=smtp\nSMTP_HOST=smtp.beget.com\nSMTP_PORT=465\nSMTP_USER=noreply@anoma-wiki.ru\nMAIL_FROM=noreply@anoma-wiki.ru\n" > "$f.new"; printf "SMTP_PASS=\"%s\"\n" "$P" >> "$f.new"; chown root:root "$f.new"; chmod 600 "$f.new"; mv "$f.new" "$f"'
 
    Проверить без показа пароля: `sudo ls -l /etc/anoma/api.env` (ожидается `-rw------- root root`)
    и `sudo cut -d= -f1 /etc/anoma/api.env` (только имена переменных).
-3. Перед первым деплоем с миграцией снять бэкап БД: `sudo /usr/local/bin/anoma-backup.sh`.
+3. Перед первым деплоем с миграцией: проверить, что в боевой БД нет логинов, различающихся только регистром
+   (запрос только читает):
+
+       sudo sqlite3 /var/lib/anoma/db/anoma.db "SELECT lower(login), COUNT(*) FROM users GROUP BY lower(login) HAVING COUNT(*) > 1;"
+
+   Вывод должен быть **пустым**. Если строки есть — уникальный индекс миграции v2 не создастся и сервис не
+   запустится; сначала переименовать дубликаты. Затем снять бэкап БД: `sudo /usr/local/bin/anoma-backup.sh`.
 4. Обновить на VPS юнит и nginx из `server/deploy/`: `anoma-api.service` -> `/etc/systemd/system/`,
    `nginx-limits.conf` -> `/etc/nginx/conf.d/anoma-limits.conf`, блоки из `nginx-map.conf` (`/account`,
    `/privacy`, regex-`location` для `register|forgot-password|resend-verification`) -> в HTTPS `server{}`
@@ -256,11 +262,14 @@ node tools/decrypt-map.js      # map.enc -> map.js
 (`spf=pass`, `dkim=pass`).
 
 **Пока почта не настроена:** `MAIL_MODE` не задан, регистрация, повторная отправка и сброс пароля отвечают 503,
-вход админа и карта работают как раньше.
+вход админа и карта работают как раньше. Если `MAIL_MODE=smtp` задан без нужных переменных или значение
+`MAIL_MODE` неизвестно, сервис всё равно стартует с отключённой почтой (503) и пишет причину в журнал
+(`anoma-api: mail disabled — …` / `unknown MAIL_MODE`).
 
-**Смена пароля админа** (закрывает все сессии этого пользователя; пароль не попадает в историю команд):
+**Смена пароля админа** (закрывает все сессии этого пользователя, аннулирует его неиспользованные ссылки
+подтверждения и сброса, помечает почту подтверждённой; пароль не попадает в историю команд):
 
-    read -rs ANOMA_PASSWORD && export ANOMA_PASSWORD
+    IFS= read -rs ANOMA_PASSWORD && export ANOMA_PASSWORD
     sudo -u anoma --preserve-env=ANOMA_PASSWORD env ANOMA_DB=/var/lib/anoma/db/anoma.db       ANOMA_UPLOADS=/var/lib/anoma/uploads node /opt/anoma-api/cli.js set-password admin
     unset ANOMA_PASSWORD
 
@@ -271,12 +280,23 @@ Beget не принимает `AUTH PLAIN`, нужно добавить `AUTH LO
 `AUTH PLAIN`). Ошибка отправки не ломает регистрацию — пользователь может нажать «Выслать ещё раз».
 
 **Известные ограничения (приняты):**
-- Блокировка входа: ~10 неудачных попыток входа в один аккаунт за 10 минут (лимитер по аккаунту) закрывают
-  вход в него на 10 минут, в том числе с чужого IP. Так задумано спеком.
+- Блокировка входа: лимитер по аккаунту считает **все** попытки входа (10 за 10 минут на идентификатор —
+  логин или почту), включая успешные; после десятой вход в этот аккаунт закрыт до конца окна, в том числе с
+  чужого IP. Так задумано спеком.
 - Остаточная двухшаговая проверка существования почты: зарегистрировать свежий логин с почтой X, затем тот же
-  логин с другой почтой — `409 login_taken` ответит, только если X была свободна. Ограничена лимитами
+  логин с другой почтой — `409 login_taken` ответит, только если X была свободна или принадлежала
+  неподтверждённому аккаунту. Ограничена лимитами
   регистрации; полноценное исправление требует отложенного создания аккаунта.
-- Команда `cli.js set-password` не аннулирует уже выданные токены сброса пароля.
+- Захват чужой почты при регистрации: можно зарегистрировать аккаунт с чужим адресом; владелец адреса получает
+  ссылку подтверждения аккаунта, который он не создавал, и, перейдя по ней, оказывается в него залогинен.
+  В v1 смягчено только для случая, когда адрес занят старым **неподтверждённым** аккаунтом с другим логином:
+  такая запись удаляется, и создаётся новый аккаунт с паролем того, кто регистрируется сейчас. Правильное
+  исправление (не входить автоматически при подтверждении / требовать пароль) нужно решить **до этапа C**
+  (личные метки).
+- SMTP: что Beget принимает `AUTH PLAIN` на порту 465 и что письма попадают во «Входящие», не проверено до
+  первой реальной отправки с прода. Адреса с не-ASCII символами SMTP-клиент не поддерживает (нет SMTPUTF8) —
+  такие адреса, скорее всего, будут отклонены на `RCPT`.
+- `MAIL_MODE=log` печатает одноразовые ссылки в журнал — **никогда** не использовать на проде.
 - Страница `/privacy` — заготовка для владельца и юриста, не готовый юридический текст.
 - Браузерные сценарии (вёрстка на 375 px, стирание фрагмента с токеном, возврат по `?next=`) автоматикой
   кликами не проверялись — до анонса нужно один раз пройти их руками на телефоне и ПК.
