@@ -10,20 +10,35 @@ const ACTIONS = new Set([
   'mark:create',
   'mark:update',
   'mark:delete',
+  'feature:propose',
+  'report:create',
+  'moderation:read',
+  'moderation:write',
 ]);
 
-// The only place that decides who may do what. Shared content: admins only.
-// Later: let role 'user' create features (status 'pending') and update/delete their own
-// pending ones by inspecting `resource` (a feature row with author_id/status).
+// The only place that decides who may do what. Direct publishing, maps, categories and photos: admins only.
+// Users propose features (status 'pending') and manage only their own proposals.
 function can(user, action, resource) {
   if (!ACTIONS.has(action)) throw new Error('unknown action: ' + action);
   if (!user) return false;
-  // Personal marks: any signed-in user (admin too) creates; only the owner changes or deletes.
-  if (action === 'mark:create') return true;
-  if (action === 'mark:update' || action === 'mark:delete') {
-    return Boolean(resource) && resource.user_id === user.id;
+  const admin = user.role === 'admin';
+  switch (action) {
+    case 'mark:create':
+      return true;
+    case 'mark:update':
+    case 'mark:delete':
+      return Boolean(resource) && resource.user_id === user.id;
+    case 'feature:propose':
+    case 'report:create':
+      return !user.proposalsBlocked;
+    case 'feature:update':
+      return admin || (Boolean(resource) && resource.author_id === user.id
+        && resource.status === 'pending' && !resource.reject_reason);
+    case 'feature:delete':
+      return admin || (Boolean(resource) && resource.author_id === user.id && resource.status === 'pending');
+    default:
+      return admin;
   }
-  return user.role === 'admin';
 }
 
 function capabilities(user) {
@@ -32,6 +47,7 @@ function capabilities(user) {
     category: can(user, 'category:write'),
     feature: can(user, 'feature:create'),
     marks: can(user, 'mark:create'),
+    propose: can(user, 'feature:propose'),
   };
 }
 

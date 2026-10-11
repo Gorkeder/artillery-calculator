@@ -59,7 +59,7 @@ test('verify-email confirms once, does NOT open a session and the token cannot b
   assert.equal(login.status, 200);
   const me = await s.api('GET', '/api/me', { cookie: login.headers.get('set-cookie').split(';')[0] });
   assert.equal(me.json.user.login, 'newbie');
-  assert.deepEqual(me.json.can, { map: false, category: false, feature: false, marks: true });
+  assert.deepEqual(me.json.can, { map: false, category: false, feature: false, marks: true, propose: true });
 });
 
 test('an expired verification token is refused', async (t) => {
