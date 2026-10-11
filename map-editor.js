@@ -142,12 +142,14 @@
   }
 
   function onMapClick(e) {
+    if (V.mode() !== 'shared') return;
     if (!V.size()) return;
     if (ed.tool === 'point') createFeature(Geo.fromLatLng(e.latlng, V.size()));
     else if (ed.tool === 'select') deselect();
   }
 
   function onCreate(e) {
+    if (V.mode() !== 'shared') return;
     var ll = e.layer.getLatLngs();
     var ring = Array.isArray(ll[0]) ? ll[0] : ll;
     var points = Geo.latLngsToPoints(ring, V.size());
@@ -158,7 +160,8 @@
 
   // ---------- selection and geometry editing ----------
 
-  function onFeatureClick(id) {
+  function onFeatureClick(id, e) {
+    if (V.mode() !== 'shared') return V.defaultClick(id, e);
     if (ed.drawing || ed.tool === 'point') return false;
     if (ed.tool === 'select') { select(id); return true; }
     return false;
@@ -373,6 +376,7 @@
   // ---------- keyboard ----------
 
   function onKey(e) {
+    if (V.mode() !== 'shared') return;
     var tag = (e.target.tagName || '').toLowerCase();
     var typing = tag === 'input' || tag === 'textarea' || tag === 'select';
     if (e.key === 'Escape') {
@@ -422,8 +426,18 @@
     status('Режим редактора', '');
   }
 
+  // The admin switches between shared objects and personal marks: the inactive editor hides.
+  function setActive(on) {
+    els.toolbar.hidden = !on;
+    if (!on) {
+      setTool('select');
+      deselect();
+    }
+  }
+
   window.MapEditor = {
     start: start,
+    setActive: setActive,
     status: status,
     renderPhotos: renderPhotos,
     save: save,
