@@ -92,3 +92,58 @@ test('a normal user can log in but has no write capabilities', async (t) => {
   assert.equal(r.status, 200);
   assert.deepEqual(r.json.can, { map: false, category: false, feature: false });
 });
+
+test('login accepts the email instead of the login, ignoring case and spaces', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  createUser(s.db, { login: 'Visitor', password: 'visitor-pass', role: 'user', email: 'visitor@example.com' });
+  const byEmail = await s.api('POST', '/api/login', { body: { login: ' Visitor@Example.COM ', password: 'visitor-pass' } });
+  assert.equal(byEmail.status, 200);
+  assert.equal(byEmail.json.user.login, 'Visitor');
+  const byLogin = await s.api('POST', '/api/login', { body: { login: 'VISITOR', password: 'visitor-pass' } });
+  assert.equal(byLogin.status, 200);
+  assert.equal(byLogin.json.user.email, 'visitor@example.com');
+  assert.equal(byLogin.json.user.emailVerified, true);
+});
+
+test('an unverified account gets email_not_verified only with the right password', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  createUser(s.db, { login: 'pending', password: 'pending-pass', role: 'user', email: 'p@example.com', emailVerified: false });
+  const right = await s.api('POST', '/api/login', { body: { login: 'pending', password: 'pending-pass' } });
+  assert.equal(right.status, 403);
+  assert.equal(right.json.error, 'email_not_verified');
+  assert.equal(right.headers.get('set-cookie'), null);
+  const wrong = await s.api('POST', '/api/login', { body: { login: 'pending', password: 'nope-nope' } });
+  assert.equal(wrong.status, 401);
+  assert.equal(wrong.json.error, 'invalid login or password');
+});
+
+test('login is also rate limited per account across different IPs', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  for (let i = 0; i < 10; i++) {
+    const r = await s.api('POST', '/api/login', {
+      body: { login: 'admin', password: 'bad' + i },
+      headers: { 'x-forwarded-for': `10.0.0.${i + 1}` },
+    });
+    assert.equal(r.status, 401);
+  }
+  const blocked = await s.api('POST', '/api/login', {
+    body: { login: 'admin', password: 'correct horse' },
+    headers: { 'x-forwarded-for': '10.0.0.99' },
+  });
+  assert.equal(blocked.status, 429);
+});
+
+test('login stores the client IP and user agent on the session', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  await s.api('POST', '/api/login', {
+    body: { login: 'admin', password: 'correct horse' },
+    headers: { 'x-forwarded-for': '203.0.113.7', 'user-agent': 'TestAgent/1.0' },
+  });
+  const row = s.db.prepare('SELECT ip, user_agent FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
+  assert.equal(row.ip, '203.0.113.7');
+  assert.equal(row.user_agent, 'TestAgent/1.0');
+});

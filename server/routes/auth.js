@@ -9,34 +9,35 @@ const {
   sessionCookie,
   clearCookie,
 } = require('../auth');
-const { capabilities } = require('../permissions');
+const { meBody } = require('../me');
 
 // Verified against when the login does not exist, so both failure paths cost the same time.
 const DUMMY_HASH = hashPassword('timing-equalizer-password');
 
-function me(user) {
-  return {
-    user: user ? { id: user.id, login: user.login, role: user.role } : null,
-    can: capabilities(user),
-  };
-}
+const BY_LOGIN = 'SELECT id, login, role, password_hash, email_verified_at FROM users WHERE lower(login) = lower(?)';
+const BY_EMAIL = 'SELECT id, login, role, password_hash, email_verified_at FROM users WHERE lower(email) = lower(?)';
 
 module.exports = [
-  { method: 'GET', pattern: '/api/me', handler: async (c) => ({ body: me(c.user) }) },
+  { method: 'GET', pattern: '/api/me', handler: async (c) => ({ body: meBody(c.db, c.user) }) },
   {
     method: 'POST',
     pattern: '/api/login',
     handler: async (c) => {
-      if (!c.loginLimiter.allow(c.ip, c.now())) throw new HttpError(429, 'too many attempts, try again later');
+      const now = c.now();
+      if (!c.limiters.login.allow(c.ip, now)) throw new HttpError(429, 'too many attempts, try again later');
       const body = await readJson(c.req);
-      const login = typeof body.login === 'string' ? body.login : '';
+      const ident = (typeof body.login === 'string' ? body.login : '').trim().slice(0, 254);
       const password = typeof body.password === 'string' ? body.password : '';
-      const row = c.db.prepare('SELECT id, login, role, password_hash FROM users WHERE login = ?').get(login);
+      if (!c.limiters.loginAccount.allow('acct:' + ident.toLowerCase(), now)) {
+        throw new HttpError(429, 'too many attempts, try again later');
+      }
+      const row = c.db.prepare(ident.includes('@') ? BY_EMAIL : BY_LOGIN).get(ident);
       const good = verifyPassword(password, row ? row.password_hash : DUMMY_HASH);
       if (!row || !good) throw new HttpError(401, 'invalid login or password');
-      const token = createSession(c.db, row.id, c.now());
+      if (!row.email_verified_at) throw new HttpError(403, 'email_not_verified');
+      const token = createSession(c.db, row.id, now, undefined, c.clientMeta);
       c.headers['Set-Cookie'] = sessionCookie(token, { secure: c.cookieSecure });
-      return { body: me(row) };
+      return { body: meBody(c.db, row) };
     },
   },
   {
@@ -45,7 +46,7 @@ module.exports = [
     handler: async (c) => {
       if (c.token) destroySession(c.db, c.token);
       c.headers['Set-Cookie'] = clearCookie({ secure: c.cookieSecure });
-      return { body: me(null) };
+      return { body: meBody(c.db, null) };
     },
   },
 ];
