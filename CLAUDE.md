@@ -29,16 +29,23 @@ for them.
   - уже развёрнуто на VPS: сервис `anoma-api`, nginx, бэкап БД и загрузок, первая карта `main`, админ `admin`.
 - Подробности и обоснования: `docs/superpowers/specs/2026-10-11-interactive-map-editor-design.md` (спек),
   `docs/superpowers/plans/2026-10-11-interactive-map-editor.md` (план), эксплуатация — `RELEASE.md`.
+- **Аккаунты обычных пользователей (этап A)** (ветка `user-accounts`, код готов, на прод не выкачено):
+  регистрация, подтверждение почты, вход по логину или почте, сброс и смена пароля, список сессий,
+  страница `/account`, черновик `/privacy`, кнопка входа на главной и на карте, команда `cli.js set-password`;
+  спек и план — `docs/superpowers/specs|plans/2026-10-11-user-accounts*`, эксплуатация — `RELEASE.md`.
 
 ### Не сделано / ждёт решения
-- Ветка `map-editor-spec` **ещё не влита в `master`** (на проде API и статика карты уже работают; после merge
-  деплой синхронизирует всё остальное). Решить: merge локально или PR.
+- Ветки `map-editor-spec` и `user-accounts` **ещё не влиты в `master`** (на проде API и статика карты уже работают;
+  после merge деплой синхронизирует всё остальное, включая аккаунты). Решить: merge локально или PR.
+- Настроить почту на проде (ящик `noreply@anoma-wiki.ru` у Beget, `/etc/anoma/api.env`, DKIM в панели Beget),
+  обновить юнит и nginx на VPS — см. `RELEASE.md` → «Аккаунты пользователей и почта». Пока почта не настроена,
+  регистрация отвечает 503.
 - Пароль админа лежит в `C:\Users\Николай\anoma-admin-password.txt` — перенести в менеджер паролей и удалить файл.
-  Команды смены пароля нет (создать нового админа: `cli.js create-admin`).
-- На `index.html` нет ссылки на `/map` (страница доступна только по прямому адресу).
-- Аккаунты обычных пользователей (регистрация, подтверждение почты, сброс пароля, предложения точек с модерацией).
-  Задел есть: `server/permissions.js` `can()`, поля `author_id` и `status` у объектов.
-- Не вошло в v1: отмена/повтор (Ctrl+Z), история изменений, импорт/экспорт, свои иконки, видео, массовое выделение.
+  Сменить пароль: `cli.js set-password <login>` (см. `RELEASE.md`).
+- Перед анонсом аккаунтов руками пройти браузерные сценарии (регистрация, письмо, `/account` на 375 px, возврат
+  на `/map`) и показать `/privacy` юристу.
+- Этап C: личные метки; этап B: предложения точек с модерацией; смена почты, самоудаление аккаунта, соцсети, 2FA.
+- Не вошло в v1 карты: отмена/повтор (Ctrl+Z), история изменений, импорт/экспорт, свои иконки, видео, массовое выделение.
 - Баннер cookie (152-ФЗ) не сделан.
 
 ### Известные недочёты (минорные, из финального ревью)
@@ -63,10 +70,14 @@ for them.
   `map-app.js` (viewer), `map-editor.js` + `map-editor-dialogs.js` (editor), styles in `map-app.css`.
   Leaflet and Leaflet-Geoman are vendored in `vendor/` (no CDN). Geoman must load before `L.map()`.
 - `server/` — Node 22+ API (`node:http` + `node:sqlite`, no npm deps) for maps, categories, features,
-  photos and admin login. Deployed separately to `/opt/anoma-api`; **never published** by the static
+  photos, admin login and user accounts (`mailer.js` — SMTP/log/memory mail, `tokens.js` — one-time
+  verify/reset tokens, `routes/account.js` — registration, verification, reset, sessions). Deployed separately to `/opt/anoma-api`; **never published** by the static
   rsync. Data lives in `/var/lib/anoma/` on the VPS. See `RELEASE.md` ("Карта-редактор").
   All write permissions go through `server/permissions.js` `can()`; coordinates are stored as 0..1
   fractions of the map image.
+- `account.html`, `account.js`, `account.css` — user account page (served at `/account`: login, registration,
+  e-mail verification, password reset/change, session list). `account-nav.js` — header "Войти"/login link,
+  included only by `index.html`. `privacy.html` — privacy policy draft (served at `/privacy`).
 - `index.html` — landing page (hero, playtest calendar). Links to `styles.css`. The
   playtest calendar is hardcoded as a `PLAYTESTS` array inline in a `<script>` at the
   bottom of the file — add new playtests by editing that array directly, no CMS/data file.

@@ -193,6 +193,7 @@ node tools/decrypt-map.js      # map.enc -> map.js
 **Локальная разработка:**
 
     export ANOMA_DB=.dev/db/anoma.db ANOMA_UPLOADS=.dev/uploads COOKIE_SECURE=0 DEV_STATIC=.
+    export MAIL_MODE=log PUBLIC_URL=http://localhost:3000   # письма печатаются в консоль сервера
     ANOMA_PASSWORD=dev-password-1 node server/cli.js create-admin admin
     node server/cli.js seed-map main "Основная карта" map.js
     node server/index.js          # http://localhost:3000/map
@@ -202,3 +203,94 @@ node tools/decrypt-map.js      # map.enc -> map.js
 **Откат.** Сервис: вернуть предыдущий коммит и пушнуть (или `sudo systemctl stop anoma-api` — тогда
 `/map` покажет «Не удалось загрузить карту», остальной сайт не затронут). Данные: восстановить
 `anoma.db` из бэкапа при остановленном сервисе.
+
+## Аккаунты пользователей и почта
+
+Спек: `docs/superpowers/specs/2026-10-11-user-accounts-design.md`. Код: `server/routes/account.js`,
+`server/mailer.js`, `server/tokens.js`; страницы `/account` и `/privacy`. Файлы из `server/deploy/`
+деплоем **не выкладываются** — на VPS их нужно обновить руками (шаг 4).
+
+**Что нужно подготовить один раз (владелец сайта):**
+
+1. Почтовый ящик `noreply@anoma-wiki.ru` в панели Beget (раздел «Почта») — он уже создан. DNS домена и MX
+   (mx1/mx2.beget.com, SPF `redirect=beget.com`) тоже у Beget. SPF и DKIM для почты Beget ведёт сам Beget:
+   в панели проверить, что для домена включена DKIM-подпись, а после первой отправки открыть заголовки
+   полученного письма и убедиться, что `spf=pass` и `dkim=pass`. Отправлять напрямую с VPS **нельзя**:
+   у IP сервера нет PTR (проверено 2026-10-11), только через SMTP Beget. Исходящие порты 465 к
+   `smtp.beget.com` и 25 с VPS открыты (проверено тем же пробным запуском 2026-10-11).
+2. Создать на VPS `/etc/anoma/api.env` (владелец `root`, права `0600`) с содержимым:
+
+       MAIL_MODE=smtp
+       SMTP_HOST=smtp.beget.com
+       SMTP_PORT=465
+       SMTP_USER=noreply@anoma-wiki.ru
+       SMTP_PASS=<пароль ящика>
+       MAIL_FROM=noreply@anoma-wiki.ru
+
+   `PUBLIC_URL=https://anoma-wiki.ru` уже прописан в юните. **Пароль вводит владелец сам на сервере**,
+   не в чате и не в команде. Команда ниже спрашивает пароль скрытым вводом (в историю оболочки и в список
+   процессов он не попадает: `read` и `printf` — встроенные команды), пишет весь файл с правами `0600`,
+   владелец `root:root`, и заменяет его атомарно. Кавычки и обратные слэши в пароле экранируются под
+   разбор `EnvironmentFile` в systemd:
+
+       sudo bash -c 'set -eu; umask 077; f=/etc/anoma/api.env; mkdir -p /etc/anoma
+       read -rsp "SMTP password: " P; echo
+       bs=$(printf "\\\\"); q="\""
+       P=${P//"$bs"/"$bs$bs"}; P=${P//"$q"/"$bs$q"}
+       {
+         printf "MAIL_MODE=smtp
+SMTP_HOST=smtp.beget.com
+SMTP_PORT=465
+"
+         printf "SMTP_USER=noreply@anoma-wiki.ru
+MAIL_FROM=noreply@anoma-wiki.ru
+"
+         printf "SMTP_PASS=\"%s\"
+" "$P"
+       } > "$f.new"
+       chown root:root "$f.new"; chmod 600 "$f.new"; mv "$f.new" "$f"'
+
+   Проверить без показа пароля: `sudo ls -l /etc/anoma/api.env` (ожидается `-rw------- root root`)
+   и `sudo cut -d= -f1 /etc/anoma/api.env` (только имена переменных).
+3. Перед первым деплоем с миграцией снять бэкап БД: `sudo /usr/local/bin/anoma-backup.sh`.
+4. Обновить на VPS юнит и nginx из `server/deploy/`: `anoma-api.service` -> `/etc/systemd/system/`,
+   `nginx-limits.conf` -> `/etc/nginx/conf.d/anoma-limits.conf`, блоки из `nginx-map.conf` (`/account`,
+   `/privacy`, regex-`location` для `register|forgot-password|resend-verification`) -> в HTTPS `server{}`
+   перед `location /api/`. Затем:
+
+       sudo systemctl daemon-reload && sudo nginx -t && sudo systemctl reload nginx && sudo systemctl restart anoma-api
+
+   Регулярное `location ~ ^/api/(register|forgot-password|resend-verification)$` приоритетнее обычного
+   префикса `location /api/`, а точный `location = /api/login` обрабатывается раньше обоих.
+5. Выкладка кода: пуш в `master` (статика `account.html`, `account.js`, `account.css`, `account-nav.js`,
+   `privacy.html` + `server/`). Миграция БД выполняется сама при старте сервиса.
+
+**Проверка на проде:** зарегистрироваться тестовым аккаунтом, убедиться, что письмо пришло во «Входящие»
+(не в «Спам»), перейти по ссылке, войти, выйти, пройти «Забыли пароль?». Посмотреть заголовки письма
+(`spf=pass`, `dkim=pass`).
+
+**Пока почта не настроена:** `MAIL_MODE` не задан, регистрация, повторная отправка и сброс пароля отвечают 503,
+вход админа и карта работают как раньше.
+
+**Смена пароля админа:** `ANOMA_PASSWORD=<новый> node /opt/anoma-api/cli.js set-password admin`
+(закрывает все сессии этого пользователя; пароль вводить так же, как при `create-admin` — через `read -rs`).
+
+**Локально:** `MAIL_MODE=log PUBLIC_URL=http://localhost:3000` — письма печатаются в консоль сервера.
+
+**Если письма не уходят:** `journalctl -u anoma-api -n 50` (токены и тела писем в лог не пишутся). Если
+Beget не принимает `AUTH PLAIN`, нужно добавить `AUTH LOGIN` в `server/mailer.js` (сейчас реализован только
+`AUTH PLAIN`). Ошибка отправки не ломает регистрацию — пользователь может нажать «Выслать ещё раз».
+
+**Известные ограничения (приняты):**
+- Блокировка входа: ~10 неудачных попыток входа в один аккаунт за 10 минут (лимитер по аккаунту) закрывают
+  вход в него на 10 минут, в том числе с чужого IP. Так задумано спеком.
+- Остаточная двухшаговая проверка существования почты: зарегистрировать свежий логин с почтой X, затем тот же
+  логин с другой почтой — `409 login_taken` ответит, только если X была свободна. Ограничена лимитами
+  регистрации; полноценное исправление требует отложенного создания аккаунта.
+- Команда `cli.js set-password` не аннулирует уже выданные токены сброса пароля.
+- Страница `/privacy` — заготовка для владельца и юриста, не готовый юридический текст.
+- Браузерные сценарии (вёрстка на 375 px, стирание фрагмента с токеном, возврат по `?next=`) автоматикой
+  кликами не проверялись — до анонса нужно один раз пройти их руками на телефоне и ПК.
+
+**Откат.** Убрать `MAIL_MODE` из `/etc/anoma/api.env` и перезапустить сервис — регистрация отключится.
+Миграция БД обратима только из бэкапа; новые колонки старый код игнорирует.

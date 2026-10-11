@@ -9,6 +9,9 @@ WorkingDirectory=/opt/anoma-api
 Environment=PORT=3000
 Environment=ANOMA_DB=/var/lib/anoma/db/anoma.db
 Environment=ANOMA_UPLOADS=/var/lib/anoma/uploads
+# SMTP and MAIL_MODE live here (root:root 0600). The "-" makes the file optional.
+EnvironmentFile=-/etc/anoma/api.env
+Environment=PUBLIC_URL=https://anoma-wiki.ru
 ExecStart=/usr/bin/node /opt/anoma-api/index.js
 Restart=on-failure
 RestartSec=3
