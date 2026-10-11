@@ -33,7 +33,8 @@ async function readJson(req, limit = 100 * 1024) {
   if (buf.length === 0) return {};
   let value;
   try {
-    value = JSON.parse(buf.toString('utf8'));
+    // fatal: a non-UTF-8 client must get an error, not silently stored U+FFFD characters
+    value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buf));
   } catch {
     throw new HttpError(400, 'invalid json');
   }

@@ -135,3 +135,12 @@ test('malformed json body is a 400, not a 500', async (t) => {
   const r = await s.api('POST', '/api/maps', { cookie: ck, raw: '{not json', headers: { 'content-type': 'application/json' } });
   assert.equal(r.status, 400);
 });
+
+test('request bodies that are not valid UTF-8 are rejected instead of being stored with replacement characters', async (t) => {
+  const { s, ck } = await setup(t);
+  const bad = Buffer.concat([Buffer.from('{"slug":"bad","title":"'), Buffer.from([0xd2, 0xe0, 0xe9]), Buffer.from('"}')]);
+  const r = await s.api('POST', '/api/maps', { cookie: ck, raw: bad, headers: { 'content-type': 'application/json' } });
+  assert.equal(r.status, 400);
+  const maps = (await s.api('GET', '/api/maps', { cookie: ck })).json;
+  assert.deepEqual(maps.map((m) => m.slug), ['north']);
+});
