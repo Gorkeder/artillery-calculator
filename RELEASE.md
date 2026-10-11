@@ -231,24 +231,10 @@ node tools/decrypt-map.js      # map.enc -> map.js
    не в чате и не в команде. Команда ниже спрашивает пароль скрытым вводом (в историю оболочки и в список
    процессов он не попадает: `read` и `printf` — встроенные команды), пишет весь файл с правами `0600`,
    владелец `root:root`, и заменяет его атомарно. Кавычки и обратные слэши в пароле экранируются под
-   разбор `EnvironmentFile` в systemd:
+   разбор `EnvironmentFile` в systemd. Команда — **одна строка**, копировать целиком; значения из
+   `/etc/anoma/api.env` перекрывают строки `Environment=` юнита независимо от порядка строк в юните:
 
-       sudo bash -c 'set -eu; umask 077; f=/etc/anoma/api.env; mkdir -p /etc/anoma
-       read -rsp "SMTP password: " P; echo
-       bs=$(printf "\\\\"); q="\""
-       P=${P//"$bs"/"$bs$bs"}; P=${P//"$q"/"$bs$q"}
-       {
-         printf "MAIL_MODE=smtp
-SMTP_HOST=smtp.beget.com
-SMTP_PORT=465
-"
-         printf "SMTP_USER=noreply@anoma-wiki.ru
-MAIL_FROM=noreply@anoma-wiki.ru
-"
-         printf "SMTP_PASS=\"%s\"
-" "$P"
-       } > "$f.new"
-       chown root:root "$f.new"; chmod 600 "$f.new"; mv "$f.new" "$f"'
+       sudo bash -c 'set -eu; umask 077; f=/etc/anoma/api.env; mkdir -p /etc/anoma; IFS= read -rsp "SMTP password: " P; echo; bs=$(printf "\\\\"); q="\""; P=${P//"$bs"/"$bs$bs"}; P=${P//"$q"/"$bs$q"}; rm -f "$f.new"; printf "MAIL_MODE=smtp\nSMTP_HOST=smtp.beget.com\nSMTP_PORT=465\nSMTP_USER=noreply@anoma-wiki.ru\nMAIL_FROM=noreply@anoma-wiki.ru\n" > "$f.new"; printf "SMTP_PASS=\"%s\"\n" "$P" >> "$f.new"; chown root:root "$f.new"; chmod 600 "$f.new"; mv "$f.new" "$f"'
 
    Проверить без показа пароля: `sudo ls -l /etc/anoma/api.env` (ожидается `-rw------- root root`)
    и `sudo cut -d= -f1 /etc/anoma/api.env` (только имена переменных).
@@ -272,8 +258,11 @@ MAIL_FROM=noreply@anoma-wiki.ru
 **Пока почта не настроена:** `MAIL_MODE` не задан, регистрация, повторная отправка и сброс пароля отвечают 503,
 вход админа и карта работают как раньше.
 
-**Смена пароля админа:** `ANOMA_PASSWORD=<новый> node /opt/anoma-api/cli.js set-password admin`
-(закрывает все сессии этого пользователя; пароль вводить так же, как при `create-admin` — через `read -rs`).
+**Смена пароля админа** (закрывает все сессии этого пользователя; пароль не попадает в историю команд):
+
+    read -rs ANOMA_PASSWORD && export ANOMA_PASSWORD
+    sudo -u anoma --preserve-env=ANOMA_PASSWORD env ANOMA_DB=/var/lib/anoma/db/anoma.db       ANOMA_UPLOADS=/var/lib/anoma/uploads node /opt/anoma-api/cli.js set-password admin
+    unset ANOMA_PASSWORD
 
 **Локально:** `MAIL_MODE=log PUBLIC_URL=http://localhost:3000` — письма печатаются в консоль сервера.
 
