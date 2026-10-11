@@ -42,8 +42,9 @@
   нестабильны). Оформление в палитре сайта (`#121212`, `#d4c24f`).
 - **Бэкенд:** `server/` — Node 22 без npm-зависимостей (`node:http`, `node:sqlite`,
   `crypto.scrypt`). Слушает `127.0.0.1:3000`, nginx проксирует `/api/`.
-- **Хранилище:** SQLite `/var/lib/anoma/anoma.db`, загрузки
-  `/var/lib/anoma/uploads/`. Оба пути вне `/var/www/anoma`, rsync их не затрагивает.
+- **Хранилище:** SQLite `/var/lib/anoma/db/anoma.db` (каталог `db/` с правами 0700
+  и владельцем `anoma`: в базе хэши паролей), загрузки `/var/lib/anoma/uploads/`
+  (читаются nginx). Оба пути вне `/var/www/anoma`, rsync их не затрагивает.
 
 ## Модель данных
 
