@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');
-const { createRateLimiter, createUser } = require('../auth');
+const { createRateLimiter, createUser, verifyPassword, sha256 } = require('../auth');
 
 const GOOD = { login: 'newbie', email: 'newbie@example.com', password: 'longenough1', consent: true };
 
@@ -340,6 +340,43 @@ test('reset-password rejects huge passwords and malformed tokens', async (t) => 
   }
   const ok = await s.api('POST', '/api/reset-password', { body: { token, password: 'fresh-password-1' } });
   assert.equal(ok.status, 200, 'rejected attempts did not burn the token');
+});
+
+test('a reset leaves the database consistent: new hash, no sessions, token used', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  await registerAndVerify(s);
+  await s.api('POST', '/api/login', { body: { login: 'newbie', password: 'longenough1' } });
+  await s.api('POST', '/api/forgot-password', { body: { email: 'newbie@example.com' } });
+  const token = s.lastToken('reset');
+  const r = await s.api('POST', '/api/reset-password', { body: { token, password: 'brand-new-pass' } });
+  assert.equal(r.status, 200);
+  const u = s.db.prepare("SELECT id, password_hash FROM users WHERE login = 'newbie'").get();
+  assert.equal(verifyPassword('brand-new-pass', u.password_hash), true);
+  assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM sessions WHERE user_id = ?').get(u.id).n, 0);
+  assert.notEqual(s.db.prepare('SELECT used_at FROM auth_tokens WHERE token_hash = ?').get(sha256(token)).used_at, null);
+});
+
+test('reset-password and change-password are atomic when a step fails', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  const { cookie } = await registerAndVerify(s);
+  await s.api('POST', '/api/login', { body: { login: 'newbie', password: 'longenough1' } }); // a second session
+  await s.api('POST', '/api/forgot-password', { body: { email: 'newbie@example.com' } });
+  const token = s.lastToken('reset');
+  s.db.exec("CREATE TRIGGER boom BEFORE DELETE ON sessions BEGIN SELECT RAISE(ABORT, 'boom'); END");
+  const failed = await s.api('POST', '/api/reset-password', { body: { token, password: 'brand-new-pass' } });
+  assert.equal(failed.status, 500);
+  const hashOf = () => s.db.prepare("SELECT password_hash FROM users WHERE login = 'newbie'").get().password_hash;
+  assert.equal(verifyPassword('longenough1', hashOf()), true, 'password unchanged');
+  assert.equal(s.db.prepare('SELECT used_at FROM auth_tokens WHERE token_hash = ?').get(sha256(token)).used_at, null, 'token not burned');
+  const change = await s.api('POST', '/api/change-password', { cookie, body: { current: 'longenough1', next: 'new-password-1' } });
+  assert.equal(change.status, 500);
+  assert.equal(verifyPassword('longenough1', hashOf()), true, 'password unchanged by change-password');
+  s.db.exec('DROP TRIGGER boom');
+  const ok = await s.api('POST', '/api/reset-password', { body: { token, password: 'brand-new-pass' } });
+  assert.equal(ok.status, 200);
 });
 
 test('change-password needs the current password and keeps only the current session', async (t) => {

@@ -42,11 +42,22 @@ function setPassword(db, login, password) {
   if (typeof password !== 'string' || password.length < 8) throw new Error('password must be at least 8 characters');
   const row = db.prepare('SELECT id FROM users WHERE lower(login) = lower(?)').get(String(login));
   if (!row) throw new Error('user not found: ' + login);
-  db.prepare("UPDATE users SET password_hash = ?, password_changed_at = datetime('now') WHERE id = ?").run(
-    hashPassword(password),
-    row.id,
-  );
-  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(row.id);
+  const hash = hashPassword(password);
+  // An admin who sets a password proves control of the account: verify the address, close every
+  // session and void outstanding one-time links (e.g. a pending reset) — all or nothing.
+  db.exec('BEGIN');
+  try {
+    db.prepare(
+      `UPDATE users SET password_hash = ?, password_changed_at = datetime('now'),
+         email_verified_at = COALESCE(email_verified_at, datetime('now')) WHERE id = ?`,
+    ).run(hash, row.id);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(row.id);
+    db.prepare('DELETE FROM auth_tokens WHERE user_id = ?').run(row.id);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
 }
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');

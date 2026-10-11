@@ -56,13 +56,22 @@ function smtpSend({ user, pass, helo, connect, timeoutMs }, { from, to, data }) 
 
     function deliver() {
       if (!waiter) return;
-      const lines = buf.split('\r\n');
-      const end = lines.findIndex((l) => /^\d{3}( |$)/.test(l));
-      if (end < 0) return;
-      buf = lines.slice(end + 1).join('\r\n');
-      const w = waiter;
-      waiter = null;
-      w({ code: Number(lines[end].slice(0, 3)) });
+      // Only CRLF-terminated lines are complete; an unterminated tail stays in the buffer
+      // (a reply may arrive split anywhere, even between the code and the "-"/" " separator).
+      let pos = 0;
+      for (;;) {
+        const eol = buf.indexOf('\r\n', pos);
+        if (eol < 0) return;
+        const line = buf.slice(pos, eol);
+        pos = eol + 2;
+        if (/^\d{3}( |$)/.test(line)) {
+          buf = buf.slice(pos);
+          const w = waiter;
+          waiter = null;
+          w({ code: Number(line.slice(0, 3)) });
+          return;
+        }
+      }
     }
 
     socket.setEncoding('utf8');

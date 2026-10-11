@@ -144,6 +144,18 @@ function closeSessions(c, userId, exceptToken) {
   }
 }
 
+// Synchronous body only: nothing may await between BEGIN and COMMIT.
+function inTransaction(db, fn) {
+  db.exec('BEGIN');
+  try {
+    fn();
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
 routes.push(
   {
     method: 'POST',
@@ -175,14 +187,17 @@ routes.push(
       if (!user) throw new HttpError(400, 'token_invalid');
       const passErr = checkPassword(password, user.login);
       if (passErr) throw new HttpError(400, passErr);
-      if (consumeToken(c.db, b.token, 'reset_password', c.now()) === null) throw new HttpError(400, 'token_invalid');
-      c.db
-        .prepare(
-          `UPDATE users SET password_hash = ?, password_changed_at = datetime('now'),
-             email_verified_at = COALESCE(email_verified_at, datetime('now')) WHERE id = ?`,
-        )
-        .run(hashPassword(password), userId);
-      closeSessions(c, userId, null);
+      const hash = hashPassword(password);
+      inTransaction(c.db, () => {
+        if (consumeToken(c.db, b.token, 'reset_password', c.now()) === null) throw new HttpError(400, 'token_invalid');
+        c.db
+          .prepare(
+            `UPDATE users SET password_hash = ?, password_changed_at = datetime('now'),
+               email_verified_at = COALESCE(email_verified_at, datetime('now')) WHERE id = ?`,
+          )
+          .run(hash, userId);
+        closeSessions(c, userId, null);
+      });
       return { body: GENERIC };
     },
   },
@@ -199,10 +214,13 @@ routes.push(
       if (!c.limiters.loginAccount.allow('acct:' + user.login.toLowerCase(), c.now())) throw tooMany();
       const row = c.db.prepare('SELECT password_hash FROM users WHERE id = ?').get(user.id);
       if (!verifyPassword(str(b.current), row.password_hash)) throw new HttpError(400, 'current_password_wrong');
-      c.db
-        .prepare("UPDATE users SET password_hash = ?, password_changed_at = datetime('now') WHERE id = ?")
-        .run(hashPassword(next), user.id);
-      closeSessions(c, user.id, c.token);
+      const hash = hashPassword(next);
+      inTransaction(c.db, () => {
+        c.db
+          .prepare("UPDATE users SET password_hash = ?, password_changed_at = datetime('now') WHERE id = ?")
+          .run(hash, user.id);
+        closeSessions(c, user.id, c.token);
+      });
       return { body: GENERIC };
     },
   },

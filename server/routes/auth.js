@@ -10,6 +10,7 @@ const {
   clearCookie,
 } = require('../auth');
 const { meBody } = require('../me');
+const { normalizeEmail } = require('../account-rules');
 
 // Verified against when the login does not exist, so both failure paths cost the same time.
 const DUMMY_HASH = hashPassword('timing-equalizer-password');
@@ -28,10 +29,17 @@ module.exports = [
       const body = await readJson(c.req);
       const ident = (typeof body.login === 'string' ? body.login : '').trim().slice(0, 254);
       const password = typeof body.password === 'string' ? body.password : '';
-      if (!c.limiters.loginAccount.allow('acct:' + ident.toLowerCase(), now)) {
+      const isEmail = ident.includes('@');
+      // An @ identifier is looked up (and rate limited) by its normalized form; one that does not
+      // normalize is an unknown account: same 401 path, same dummy-hash cost.
+      const email = isEmail ? normalizeEmail(ident) : null;
+      const key = isEmail && email ? email : ident.toLowerCase();
+      if (!c.limiters.loginAccount.allow('acct:' + key, now)) {
         throw new HttpError(429, 'too many attempts, try again later');
       }
-      const row = c.db.prepare(ident.includes('@') ? BY_EMAIL : BY_LOGIN).get(ident);
+      let row = null;
+      if (!isEmail) row = c.db.prepare(BY_LOGIN).get(ident);
+      else if (email) row = c.db.prepare(BY_EMAIL).get(email);
       const good = verifyPassword(password, row ? row.password_hash : DUMMY_HASH);
       if (!row || !good) throw new HttpError(401, 'invalid login or password');
       if (!row.email_verified_at) throw new HttpError(403, 'email_not_verified');

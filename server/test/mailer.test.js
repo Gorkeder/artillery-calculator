@@ -114,6 +114,62 @@ test('smtp mailer rejects on auth failure and on a silent server (timeout)', asy
   );
 });
 
+// Writes each reply as several TCP chunks with pauses, splitting lines in awkward places.
+function chunkyFakeSmtp() {
+  const received = [];
+  const pause = () => new Promise((r) => setTimeout(r, 15));
+  const server = net.createServer((sock) => {
+    sock.setEncoding('utf8');
+    sock.on('error', () => {});
+    const sendChunks = async (chunks) => { for (const c of chunks) { sock.write(c); await pause(); } };
+    let buf = '';
+    let inData = false;
+    const queue = [];
+    let busy = false;
+    const enqueue = (chunks) => { queue.push(chunks); if (!busy) drain(); };
+    async function drain() {
+      busy = true;
+      while (queue.length) await sendChunks(queue.shift());
+      busy = false;
+    }
+    enqueue(['22', '0 fake', ' ESMTP\r', '\n']);
+    sock.on('data', (chunk) => {
+      buf += chunk;
+      for (;;) {
+        if (inData) {
+          const end = buf.indexOf('\r\n.\r\n');
+          if (end < 0) return;
+          buf = buf.slice(end + 5);
+          inData = false;
+          received.push(true);
+          enqueue(['250', ' queued\r\n']);
+          continue;
+        }
+        const i = buf.indexOf('\r\n');
+        if (i < 0) return;
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        if (/^EHLO /.test(line)) enqueue(['250-fake\r\n250-SI', 'ZE 1000\r\n250', '-8BITMIME\r\n250 AUTH PLAIN\r\n']);
+        else if (/^AUTH PLAIN /.test(line)) enqueue(['235 ok\r\n']);
+        else if (/^MAIL FROM:/.test(line)) enqueue(['250 ok\r\n']);
+        else if (/^RCPT TO:/.test(line)) enqueue(['250 ok\r\n']);
+        else if (line === 'DATA') { inData = true; enqueue(['354 go\r\n']); }
+        else if (line === 'QUIT') sock.end('221 bye\r\n');
+      }
+    });
+  });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => resolve({ server, received, port: server.address().port }));
+  });
+}
+
+test('smtp mailer copes with replies split across TCP chunks (mid-line and between code and separator)', async (t) => {
+  const f = await chunkyFakeSmtp();
+  t.after(() => f.server.close());
+  await mailerFor(f.port, { timeoutMs: 3000 }).send({ to: 'user@example.com', subject: 's', text: 't' });
+  assert.equal(f.received.length, 1);
+});
+
 test('memory mailer collects messages; createMailer picks implementation by mode', async () => {
   const m = createMemoryMailer();
   await m.send({ to: 'a@b.cc', subject: 's', text: 't' });

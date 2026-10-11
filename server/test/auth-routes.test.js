@@ -106,6 +106,31 @@ test('login accepts the email instead of the login, ignoring case and spaces', a
   assert.equal(byLogin.json.user.emailVerified, true);
 });
 
+test('an @ identifier that is not a valid email is treated as an unknown account', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  // createUser (CLI path) does not validate emails, so a row with a non-normalizable address can exist.
+  createUser(s.db, { login: 'oddball', password: 'oddball-pass', role: 'user', email: 'odd@localhost' });
+  const unknown = await s.api('POST', '/api/login', { body: { login: 'ghost@example.com', password: 'oddball-pass' } });
+  assert.equal(unknown.status, 401);
+  for (const ident of ['odd@localhost', 'a@@b', '@']) {
+    const r = await s.api('POST', '/api/login', { body: { login: ident, password: 'oddball-pass' } });
+    assert.equal(r.status, 401, ident);
+    assert.deepEqual(r.json, unknown.json);
+    assert.equal(r.headers.get('set-cookie'), null);
+  }
+});
+
+test('the per-account limiter key of an email identifier is the normalized email', async (t) => {
+  const keys = [];
+  const s = await startTestServer({ limiters: { loginAccount: { allow: (key) => { keys.push(key); return true; } } } });
+  t.after(() => s.cleanup());
+  createUser(s.db, { login: 'Visitor', password: 'visitor-pass', role: 'user', email: 'visitor@example.com' });
+  const r = await s.api('POST', '/api/login', { body: { login: ' Visitor@Example.COM ', password: 'visitor-pass' } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(keys, ['acct:visitor@example.com']);
+});
+
 test('an unverified account gets email_not_verified only with the right password', async (t) => {
   const s = await startTestServer();
   t.after(() => s.cleanup());

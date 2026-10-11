@@ -7,7 +7,7 @@ const { loadConfig } = require('./config');
 const { openDb } = require('./db');
 const { createApp } = require('./app');
 const { createStaticHandler } = require('./static');
-const { createMailer } = require('./mailer');
+const { createMailer, createUnconfiguredMailer } = require('./mailer');
 const { cleanup } = require('./tokens');
 
 const cfg = loadConfig();
@@ -15,8 +15,17 @@ fs.mkdirSync(path.dirname(cfg.dbFile), { recursive: true });
 fs.mkdirSync(cfg.uploadsDir, { recursive: true });
 
 const db = openDb(cfg.dbFile);
-const mailer = createMailer(cfg);
-if (!mailer.configured) {
+// A broken mail config must not take the whole API (and /map) down: run with mail disabled instead.
+let mailer;
+try {
+  mailer = createMailer(cfg);
+} catch (err) {
+  console.error('anoma-api: mail disabled —', err.message);
+  mailer = createUnconfiguredMailer();
+}
+if (cfg.mailMode && cfg.mailMode !== 'smtp' && cfg.mailMode !== 'log') {
+  console.warn(`anoma-api: unknown MAIL_MODE "${cfg.mailMode}" (expected smtp or log), mail is disabled`);
+} else if (!mailer.configured && !cfg.mailMode) {
   console.warn('anoma-api: MAIL_MODE is not set, registration and password reset are disabled (503)');
 }
 const app = createApp({
