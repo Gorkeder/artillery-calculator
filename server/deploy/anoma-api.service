@@ -1,0 +1,23 @@
+[Unit]
+Description=ANOMA WIKI map API
+After=network.target
+
+[Service]
+User=anoma
+Group=anoma
+WorkingDirectory=/opt/anoma-api
+Environment=PORT=3000
+Environment=ANOMA_DB=/var/lib/anoma/db/anoma.db
+Environment=ANOMA_UPLOADS=/var/lib/anoma/uploads
+ExecStart=/usr/bin/node /opt/anoma-api/index.js
+Restart=on-failure
+RestartSec=3
+UMask=0022
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/anoma
+
+[Install]
+WantedBy=multi-user.target

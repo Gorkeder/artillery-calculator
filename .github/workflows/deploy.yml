@@ -38,6 +38,8 @@ jobs:
             --exclude 'docs' \
             --exclude '.superpowers' \
             --exclude '.claude' \
+            --exclude 'server' \
+            --exclude '.dev' \
             -e "ssh -o StrictHostKeyChecking=no" \
             ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/anoma/"
 
@@ -49,3 +51,15 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
             "sudo setfacl -m u:${{ secrets.SSH_USER }}:rwx,mask::rwx /var/www/anoma"
+
+      - name: Deploy API server
+        # server/ is excluded from the static sync above; it goes to /opt/anoma-api
+        # (not web-accessible). The database and uploads live in /var/lib/anoma and are never touched.
+        run: |
+          rsync -avz --delete \
+            --exclude 'test' \
+            --exclude 'deploy' \
+            -e "ssh -o StrictHostKeyChecking=no" \
+            ./server/ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/anoma-api/"
+          ssh -o StrictHostKeyChecking=no "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "sudo systemctl restart anoma-api"

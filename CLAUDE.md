@@ -9,10 +9,22 @@ artillery calculator tool for the game's mortar/gun mechanics. It is a **plain s
 site**: no framework, no bundler, no `package.json`. Every page is a single self-contained
 HTML file with inline or linked CSS/JS, served as-is by nginx.
 
-There is no build step, no linter, and no test suite in this repo — don't invent commands
+There is no build step and no linter for the static site; tests exist for the `server/` API and
+`tools/` scripts: `node --test server/test/*.test.js tools/*.test.js`. Don't invent other commands
 for them.
 
 ## Files
+
+- `map.html` — interactive map page (served at `/map`). Viewer for everyone; after an admin logs in
+  on desktop it lazy-loads the editor. Scripts: `map-common.js` (API client + DOM helper),
+  `map-geo.js` (pure geometry helpers, tested in `tools/map-geo.test.js`), `map-icons.js`,
+  `map-app.js` (viewer), `map-editor.js` + `map-editor-dialogs.js` (editor), styles in `map-app.css`.
+  Leaflet and Leaflet-Geoman are vendored in `vendor/` (no CDN). Geoman must load before `L.map()`.
+- `server/` — Node 22+ API (`node:http` + `node:sqlite`, no npm deps) for maps, categories, features,
+  photos and admin login. Deployed separately to `/opt/anoma-api`; **never published** by the static
+  rsync. Data lives in `/var/lib/anoma/` on the VPS. See `RELEASE.md` ("Карта-редактор").
+  All write permissions go through `server/permissions.js` `can()`; coordinates are stored as 0..1
+  fractions of the map image.
 
 - `index.html` — landing page (hero, playtest calendar). Links to `styles.css`. The
   playtest calendar is hardcoded as a `PLAYTESTS` array inline in a `<script>` at the
@@ -58,6 +70,9 @@ path over SSH on every push to `master` (`workflow_dispatch` also available for 
 Requires repository secrets: `SSH_PRIVATE_KEY`, `SSH_HOST`, `SSH_USER`. The workflow excludes
 `.git`, `.github`, `.gitignore`, `.gitattributes`, `tools`, and `RELEASE.md` from the sync —
 only the actual site files (`*.html`, `styles.css`, `logo.png`, `map.js`, `map.enc`) go live.
+
+The same workflow also rsyncs `server/` to `/opt/anoma-api/` and restarts the `anoma-api` systemd
+service. nginx proxies `/api/` to it and serves `/uploads/` from `/var/lib/anoma/uploads/`.
 
 To deploy manually, push to `master` (there is no staging environment).
 

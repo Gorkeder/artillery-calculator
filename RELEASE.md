@@ -151,3 +151,54 @@ node tools/decrypt-map.js      # map.enc -> map.js
 проверить `tail /opt/anoma-tools/anoma-video-feed.log` на свежие ошибки, и/или
 посмотреть поле `generatedAt` в `/var/www/anoma/videos.json` — если оно
 сильно отстаёт от текущего времени, лента давно не обновлялась.
+
+
+## Карта-редактор (`/map`) — API и данные
+
+Страница `map.html` (`/map`) работает поверх маленького API (`server/`, Node 22+, без зависимостей).
+Данные: SQLite `/var/lib/anoma/db/anoma.db` (каталог `db/` — 0700, владелец `anoma`, внутри хэши паролей),
+фото и картинки карт — `/var/lib/anoma/uploads/` (их отдаёт nginx). Код — `/opt/anoma-api`,
+сервис `anoma-api` (systemd), слушает `127.0.0.1:3000`, проксируется на `/api/`.
+
+**Деплой.** Пуш в `master` выкладывает статику в `/var/www/anoma` и синхронизирует `server/` в
+`/opt/anoma-api` с перезапуском сервиса. База и загрузки деплоем не затрагиваются.
+
+**Первичная установка** (один раз, на VPS):
+
+    sudo useradd --system --home /var/lib/anoma --shell /usr/sbin/nologin anoma
+    sudo install -d -o anoma -g anoma -m 0755 /var/lib/anoma /var/lib/anoma/uploads
+    sudo install -d -o anoma -g anoma -m 0700 /var/lib/anoma/db
+    sudo install -d -o deploy -g deploy -m 0755 /opt/anoma-api
+    # скопировать server/ в /opt/anoma-api, положить server/deploy/anoma-api.service
+    # в /etc/systemd/system/, затем:
+    sudo systemctl daemon-reload && sudo systemctl enable --now anoma-api
+    # nginx: server/deploy/nginx-limits.conf -> /etc/nginx/conf.d/anoma-limits.conf,
+    # server/deploy/nginx-map.conf -> внутрь HTTPS server{} перед `location /`; nginx -t && reload
+
+**Создать администратора** (пароль не попадает в историю команд и репозиторий):
+
+    read -rs ANOMA_PASSWORD && export ANOMA_PASSWORD
+    sudo -u anoma --preserve-env=ANOMA_PASSWORD env ANOMA_DB=/var/lib/anoma/db/anoma.db \
+      ANOMA_UPLOADS=/var/lib/anoma/uploads node /opt/anoma-api/cli.js create-admin <login>
+    unset ANOMA_PASSWORD
+
+**Первая карта из `map.js`:**
+
+    sudo -u anoma env ANOMA_DB=/var/lib/anoma/db/anoma.db ANOMA_UPLOADS=/var/lib/anoma/uploads \
+      node /opt/anoma-api/cli.js seed-map main "Основная карта" /var/www/anoma/map.js
+
+**Бэкап.** Копировать нужно `/var/lib/anoma/db/anoma.db` (через `sqlite3 … ".backup …"`) и каталог
+`/var/lib/anoma/uploads`. Ежедневный cron из сентябрьской настройки VPS должен указывать на новый путь БД.
+
+**Локальная разработка:**
+
+    export ANOMA_DB=.dev/db/anoma.db ANOMA_UPLOADS=.dev/uploads COOKIE_SECURE=0 DEV_STATIC=.
+    ANOMA_PASSWORD=dev-password-1 node server/cli.js create-admin admin
+    node server/cli.js seed-map main "Основная карта" map.js
+    node server/index.js          # http://localhost:3000/map
+
+**Тесты:** `node --test server/test/*.test.js tools/*.test.js`.
+
+**Откат.** Сервис: вернуть предыдущий коммит и пушнуть (или `sudo systemctl stop anoma-api` — тогда
+`/map` покажет «Не удалось загрузить карту», остальной сайт не затронут). Данные: восстановить
+`anoma.db` из бэкапа при остановленном сервисе.
