@@ -170,6 +170,156 @@ test('smtp mailer copes with replies split across TCP chunks (mid-line and betwe
   assert.equal(f.received.length, 1);
 });
 
+// Scripted server for AUTH negotiation. `ehlo` is the list of reply lines (without codes);
+// `plain`/`login` are the final status codes for the credentials; `chunked` splits writes.
+function authFakeSmtp({ ehlo, plain = 235, login = 235, chunked = false }) {
+  const state = { commands: [], user: null, pass: null, auth: null, delivered: 0 };
+  const pause = () => new Promise((r) => setTimeout(r, 10));
+  const server = net.createServer((sock) => {
+    sock.setEncoding('utf8');
+    sock.on('error', () => {});
+    let buf = '';
+    let inData = false;
+    let loginStep = 0;
+    const out = [];
+    let busy = false;
+    const emit = (text) => { out.push(text); if (!busy) drain(); };
+    async function drain() {
+      busy = true;
+      while (out.length) {
+        const t = out.shift();
+        if (chunked) { for (let i = 0; i < t.length; i += 5) { sock.write(t.slice(i, i + 5)); await pause(); } }
+        else sock.write(t);
+      }
+      busy = false;
+    }
+    const say = (s) => emit(s + '\r\n');
+    say('220 fake ESMTP');
+    sock.on('data', (chunk) => {
+      buf += chunk;
+      for (;;) {
+        if (inData) {
+          const end = buf.indexOf('\r\n.\r\n');
+          if (end < 0) return;
+          buf = buf.slice(end + 5);
+          inData = false;
+          state.delivered += 1;
+          say('250 queued');
+          continue;
+        }
+        const i = buf.indexOf('\r\n');
+        if (i < 0) return;
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        if (loginStep === 1) { state.user = Buffer.from(line, 'base64').toString(); loginStep = 2; say('334 UGFzc3dvcmQ6'); continue; }
+        if (loginStep === 2) {
+          state.pass = Buffer.from(line, 'base64').toString(); loginStep = 0;
+          say(login === 235 ? '235 ok' : login + ' nope');
+          continue;
+        }
+        state.commands.push(line.split(' ').slice(0, 2).join(' '));
+        if (/^EHLO /.test(line)) {
+          say(ehlo.map((l, k) => '250' + (k === ehlo.length - 1 ? ' ' : '-') + l).join('\r\n'));
+        } else if (/^AUTH PLAIN /.test(line)) {
+          state.auth = line.slice('AUTH PLAIN '.length);
+          say(plain === 235 ? '235 ok' : plain + ' nope');
+        } else if (line === 'AUTH LOGIN') { loginStep = 1; say('334 VXNlcm5hbWU6'); }
+        else if (/^MAIL FROM:/.test(line)) say('250 ok');
+        else if (/^RCPT TO:/.test(line)) say('250 ok');
+        else if (line === 'DATA') { inData = true; say('354 go'); }
+        else if (line === 'QUIT') { sock.end('221 bye\r\n'); }
+      }
+    });
+  });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => resolve({ server, state, port: server.address().port }));
+  });
+}
+
+const MSG = { to: 'user@example.com', subject: 's', text: 't' };
+
+test('auth: PLAIN is preferred when the server advertises LOGIN and PLAIN', async (t) => {
+  const f = await authFakeSmtp({ ehlo: ['fake', 'AUTH LOGIN PLAIN'] });
+  t.after(() => f.server.close());
+  await mailerFor(f.port).send(MSG);
+  assert.equal(Buffer.from(f.state.auth, 'base64').toString(), '\0noreply@anoma-wiki.ru\0p@ss');
+  assert.ok(!f.state.commands.includes('AUTH LOGIN'));
+  assert.equal(f.state.delivered, 1);
+});
+
+test('auth: PLAIN is detected in the "AUTH=PLAIN" form, case-insensitively', async (t) => {
+  const f = await authFakeSmtp({ ehlo: ['fake', 'auth=login plain'] });
+  t.after(() => f.server.close());
+  await mailerFor(f.port).send(MSG);
+  assert.ok(f.state.auth);
+  assert.equal(f.state.delivered, 1);
+});
+
+test('auth: LOGIN-only server is served with AUTH LOGIN and never sees AUTH PLAIN', async (t) => {
+  const f = await authFakeSmtp({ ehlo: ['fake', 'AUTH LOGIN'], plain: 504 });
+  t.after(() => f.server.close());
+  await mailerFor(f.port).send(MSG);
+  assert.equal(f.state.user, 'noreply@anoma-wiki.ru');
+  assert.equal(f.state.pass, 'p@ss');
+  assert.ok(!f.state.commands.includes('AUTH PLAIN'));
+  assert.equal(f.state.delivered, 1);
+});
+
+test('auth: "AUTH=LOGIN" form is understood', async (t) => {
+  const f = await authFakeSmtp({ ehlo: ['fake', 'AUTH=LOGIN'], plain: 504 });
+  t.after(() => f.server.close());
+  await mailerFor(f.port).send(MSG);
+  assert.equal(f.state.pass, 'p@ss');
+  assert.ok(!f.state.commands.includes('AUTH PLAIN'));
+});
+
+test('auth: no AUTH advertised, 504 to PLAIN falls back to LOGIN on the same connection', async (t) => {
+  const f = await authFakeSmtp({ ehlo: ['fake', 'SIZE 1000'], plain: 504 });
+  t.after(() => f.server.close());
+  await mailerFor(f.port).send(MSG);
+  assert.equal(f.state.user, 'noreply@anoma-wiki.ru');
+  assert.equal(f.state.pass, 'p@ss');
+  assert.equal(f.state.commands.filter((c) => c === 'AUTH PLAIN').length, 1);
+  assert.equal(f.state.commands.filter((c) => c === 'EHLO anoma-wiki.ru').length, 1);
+  assert.equal(f.state.delivered, 1);
+});
+
+test('auth: 535 to PLAIN fails immediately without trying LOGIN', async (t) => {
+  const f = await authFakeSmtp({ ehlo: ['fake', 'SIZE 1000'], plain: 535 });
+  t.after(() => f.server.close());
+  await assert.rejects(() => mailerFor(f.port).send(MSG), /535|unexpected reply/);
+  assert.ok(!f.state.commands.includes('AUTH LOGIN'));
+  assert.equal(f.state.delivered, 0);
+});
+
+test('auth: 535 with AUTH LOGIN credentials rejects without any further attempt', async (t) => {
+  const f = await authFakeSmtp({ ehlo: ['fake', 'AUTH LOGIN'], login: 535 });
+  t.after(() => f.server.close());
+  await assert.rejects(() => mailerFor(f.port).send(MSG), /unexpected reply 535/);
+  assert.ok(!f.state.commands.includes('AUTH PLAIN'));
+  assert.equal(f.state.commands.filter((c) => c === 'AUTH LOGIN').length, 1);
+  assert.equal(f.state.delivered, 0);
+});
+
+test('auth: error text never leaks credentials or server text', async (t) => {
+  const f = await authFakeSmtp({ ehlo: ['fake', 'AUTH LOGIN'], login: 535 });
+  t.after(() => f.server.close());
+  await assert.rejects(() => mailerFor(f.port).send(MSG), (err) => {
+    assert.equal(err.message, 'smtp: unexpected reply 535');
+    return true;
+  });
+});
+
+test('auth: multi-line EHLO split across chunks works with a LOGIN-only server', async (t) => {
+  const f = await authFakeSmtp({ ehlo: ['fake', 'SIZE 1000', '8BITMIME', 'AUTH LOGIN'], plain: 504, chunked: true });
+  t.after(() => f.server.close());
+  await mailerFor(f.port, { timeoutMs: 5000 }).send(MSG);
+  assert.equal(f.state.user, 'noreply@anoma-wiki.ru');
+  assert.equal(f.state.pass, 'p@ss');
+  assert.ok(!f.state.commands.includes('AUTH PLAIN'));
+  assert.equal(f.state.delivered, 1);
+});
+
 test('memory mailer collects messages; createMailer picks implementation by mode', async () => {
   const m = createMemoryMailer();
   await m.send({ to: 'a@b.cc', subject: 's', text: 't' });

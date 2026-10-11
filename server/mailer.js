@@ -35,6 +35,18 @@ function buildMessage({ from, to, subject, text, nowMs, fromName = 'ANOMA WIKI' 
   ].join('\r\n');
 }
 
+// Supported AUTH mechanisms (upper-cased) from the lines of a multi-line EHLO reply:
+// "250-AUTH LOGIN PLAIN" and the legacy "250 AUTH=PLAIN LOGIN" forms.
+function authMechanisms(lines) {
+  const set = new Set();
+  for (const line of lines) {
+    const m = /^\d{3}[- ]AUTH(?:[ =](.*))?$/i.exec(line);
+    if (!m || !m[1]) continue;
+    for (const w of m[1].split(/[\s=]+/)) if (w) set.add(w.toUpperCase());
+  }
+  return set;
+}
+
 // One message per connection. `connect()` must return a connected duplex socket
 // (tls.connect in production, plain net in tests).
 function smtpSend({ user, pass, helo, connect, timeoutMs }, { from, to, data }) {
@@ -65,10 +77,11 @@ function smtpSend({ user, pass, helo, connect, timeoutMs }, { from, to, data }) 
         const line = buf.slice(pos, eol);
         pos = eol + 2;
         if (/^\d{3}( |$)/.test(line)) {
+          const lines = buf.slice(0, pos - 2).split('\r\n');
           buf = buf.slice(pos);
           const w = waiter;
           waiter = null;
-          w({ code: Number(line.slice(0, 3)) });
+          w({ code: Number(line.slice(0, 3)), lines });
           return;
         }
       }
@@ -84,15 +97,40 @@ function smtpSend({ user, pass, helo, connect, timeoutMs }, { from, to, data }) 
     const expect = async (codes) => {
       const r = await read();
       if (!codes.includes(r.code)) throw new Error('smtp: unexpected reply ' + r.code);
+      return r;
+    };
+
+    // Errors carry only the reply code: never server text, credentials or message data.
+    const authPlain = () => {
+      say('AUTH PLAIN ' + Buffer.from(`\0${user}\0${pass}`, 'utf8').toString('base64'));
+      return read();
+    };
+    const authLogin = async () => {
+      say('AUTH LOGIN');
+      await expect([334]);
+      say(Buffer.from(String(user), 'utf8').toString('base64'));
+      await expect([334]);
+      say(Buffer.from(String(pass), 'utf8').toString('base64'));
+      await expect([235]);
     };
 
     (async () => {
       try {
         await expect([220]);
         say('EHLO ' + helo);
-        await expect([250]);
-        say('AUTH PLAIN ' + Buffer.from(`\0${user}\0${pass}`, 'utf8').toString('base64'));
-        await expect([235]);
+        const ehlo = await expect([250]);
+        const mechs = authMechanisms(ehlo.lines);
+        if (mechs.has('LOGIN') && !mechs.has('PLAIN')) {
+          await authLogin();
+        } else {
+          // PLAIN advertised, or nothing advertised: try PLAIN first. Without an advertisement,
+          // a refusal of the mechanism (5xx other than 535) falls back to LOGIN on this connection;
+          // 535 means bad credentials and is final.
+          const r = await authPlain();
+          const noAdvert = mechs.size === 0;
+          if (r.code !== 235 && noAdvert && r.code >= 500 && r.code <= 599 && r.code !== 535) await authLogin();
+          else if (r.code !== 235) throw new Error('smtp: unexpected reply ' + r.code);
+        }
         say(`MAIL FROM:<${from}>`);
         await expect([250]);
         say(`RCPT TO:<${to}>`);
