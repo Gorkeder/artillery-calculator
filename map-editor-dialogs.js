@@ -179,9 +179,12 @@
 
   function moderation() {
     var viewer = V();
-    var data = { proposals: [], rejected: [], reports: [], blocked: [] };
+    var data = { proposals: [], flagged: [], rejected: [], reports: [], blocked: [] };
     var tab = 'proposals';
-    var TITLES = { proposals: 'Предложения', rejected: 'Отклонённые', reports: 'Жалобы', blocked: 'Заблокированные' };
+    var TITLES = {
+      proposals: 'Предложения', flagged: 'Пустые и спам', rejected: 'Отклонённые', reports: 'Жалобы', blocked: 'Заблокированные',
+    };
+    var FLAGS = { empty: 'Пустой', duplicate: 'Дубль', frequency: 'Частая отправка' };
     var tabs = h('div', { class: 'row' });
     var list = h('div', { class: 'dlg-list' });
     var dlg;
@@ -189,7 +192,7 @@
     function reload() {
       return api.get('/api/moderation').then(function (d) {
         data = d;
-        E().setModerationCount(d.proposals.length + d.reports.length);
+        E().setModerationCount(d.proposals.length + d.flagged.length + d.reports.length);
         render();
       }, function (err) {
         list.textContent = 'Ошибка: ' + err.message;
@@ -225,6 +228,7 @@
         h('div', { class: 'mod-info' },
           h('strong', null, p.title || 'Без названия'),
           h('div', { class: 'hint' }, p.category_name + ' · ' + p.map_title + ' · ' + (p.author_login || 'аккаунт удалён')),
+          p.flag ? h('span', { class: 'chip' }, FLAGS[p.flag] || p.flag) : null,
           p.description ? h('div', { class: 'mod-text' }, p.description) : null),
         reason,
         h('button', { type: 'button', onclick: function () { showOnMap(p.map_slug, p.id); } }, 'Показать'),
@@ -281,7 +285,19 @@
           TITLES[k] + ' (' + data[k].length + ')'));
       });
       list.textContent = '';
-      var rowFor = { proposals: proposalRow, rejected: rejectedRow, reports: reportRow, blocked: blockedRow }[tab];
+      var rowFor = {
+        proposals: proposalRow, flagged: proposalRow, rejected: rejectedRow, reports: reportRow, blocked: blockedRow,
+      }[tab];
+      if (tab === 'flagged' && data.flagged.length) {
+        list.appendChild(h('div', { class: 'dlg-row' },
+          h('span', { class: 'hint' }, 'Автоматически отмечены как пустые, дубли или частая отправка.'),
+          h('button', { type: 'button', class: 'danger', onclick: function () {
+            var why = window.prompt('Причина отклонения для всех (' + data.flagged.length + '):',
+              'Пустое или повторяющееся предложение');
+            if (why === null || !why.trim()) return;
+            act(function () { return api.post('/api/moderation/reject-flagged', { reason: why.trim() }); }, true);
+          } }, 'Отклонить все (' + data.flagged.length + ')')));
+      }
       data[tab].forEach(function (item) { list.appendChild(rowFor(item)); });
       if (!data[tab].length) list.appendChild(h('p', null, 'Пока пусто.'));
     }

@@ -11,6 +11,11 @@
   var els = {};
   var isAdmin = false;
   var SHAPE_LABEL = { point: 'Точка', polygon: 'Полигон', line: 'Линия' };
+  var ERROR_TEXT = {
+    proposals_limit: 'Слишком много предложений на модерации (не больше 10), дождитесь решений',
+    drafts_limit: 'Слишком много черновиков (не больше 20), отправьте или удалите лишние',
+    proposals_blocked: 'Отправка предложений для вас закрыта',
+  };
   var DRAW_SHAPE = { polygon: 'Polygon', line: 'Line' };
 
   // ---------- status / saving ----------
@@ -31,6 +36,7 @@
       function (value) { status('Сохранено', 'ok'); return value; },
       function (err) {
         if (err.status === 401) status('Сессия истекла — обновите страницу и войдите снова', 'error');
+        else if (ERROR_TEXT[err.message]) status(ERROR_TEXT[err.message], 'error');
         else status('Ошибка: ' + err.message, 'error', function () { save(fn); });
         return null;
       });
@@ -253,9 +259,16 @@
     els.colorRow = h('div', { class: 'row' }, els.color, els.colorReset);
     els.photosLabel = h('label', null, 'Фото');
     els.note = h('p', { class: 'hint' });
+    // A user's object is a draft until the author sends it to moderation; a sent one can be withdrawn.
+    els.submit = h('button', { type: 'button', class: 'primary', onclick: function () { sendLifecycle('submit'); } },
+      'Отправить на модерацию');
+    els.withdraw = h('button', { type: 'button', onclick: function () { sendLifecycle('withdraw'); } }, 'Отозвать');
+    els.lifecycle = h('div', { class: 'row' }, els.submit, els.withdraw);
+    els.lifecycle.hidden = isAdmin;
     els.panel = h('aside', { class: 'ed-props', hidden: true },
       h('h2', null, 'Объект'),
       els.note,
+      els.lifecycle,
       h('label', null, 'Название'), els.title,
       h('label', null, 'Категория'), els.cat,
       h('label', null, 'Описание'), els.desc,
@@ -279,7 +292,7 @@
 
   // A rejected proposal of a non-admin cannot be edited any more (the server answers 404).
   function isLocked(f) {
-    return !isAdmin && f.status === 'pending' && !!f.reject_reason;
+    return !isAdmin && f.status === 'pending' && (!!f.reject_reason || !!f.submitted);
   }
 
   function showProps(f) {
@@ -309,7 +322,22 @@
     els.desc.disabled = locked;
     els.cat.disabled = locked;
     els.note.hidden = isAdmin || f.status !== 'pending';
-    els.note.textContent = f.reject_reason ? 'Отклонено: ' + f.reject_reason : 'На модерации';
+    els.note.textContent = f.reject_reason ? 'Отклонено: ' + f.reject_reason
+      : (f.submitted ? 'На модерации' : 'Черновик: ещё не отправлен на модерацию');
+    var openProposal = f.status === 'pending' && !f.reject_reason;
+    els.submit.hidden = !(openProposal && !f.submitted);
+    els.withdraw.hidden = !(openProposal && f.submitted);
+  }
+
+  // 'submit' sends a draft to moderation, 'withdraw' turns a waiting proposal back into a draft.
+  function sendLifecycle(action) {
+    var id = ed.selectedId;
+    if (id === null) return;
+    save(function () { return api.post('/api/features/' + id + '/' + action, {}); }).then(function (f) {
+      if (!f) return;
+      V.setFeature(f, true);
+      if (ed.selectedId === id) select(id);
+    });
   }
 
   function patch(fields) {
@@ -475,7 +503,7 @@
   function refreshModeration() {
     if (!isAdmin) return;
     api.get('/api/moderation').then(function (d) {
-      setModerationCount(d.proposals.length + d.reports.length);
+      setModerationCount(d.proposals.length + d.flagged.length + d.reports.length);
     }, function () { /* the badge is a convenience */ });
   }
 

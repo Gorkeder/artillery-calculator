@@ -4,9 +4,11 @@ const { HttpError, readJson } = require('../http-util');
 const { can } = require('../permissions');
 const v = require('../validate');
 const repo = require('../repo');
+const { classifySubmission } = require('../proposals');
 const { unlinkAll } = require('../files');
 
-const MAX_OPEN_PROPOSALS = 10;
+const MAX_OPEN_PROPOSALS = 10; // sent to moderation and not decided yet
+const MAX_DRAFTS = 20; // placed but not sent
 
 // Proposal writes of non-admins share one per-user limit.
 function limitProposalWrites(c) {
@@ -185,9 +187,10 @@ module.exports = [
       const fields = checked(v.validateFeature(body, { create: true }));
       if (!direct) {
         // Appearance is the admin's call; and the limit check + insert below run with no await in between.
+        // A user's new object is a draft: it reaches the moderation queue only when its author sends it.
         delete fields.color;
         delete fields.opacity;
-        if (repo.countOpenProposals(c.db, c.user.id) >= MAX_OPEN_PROPOSALS) throw new HttpError(409, 'proposals_limit');
+        if (repo.countDrafts(c.db, c.user.id) >= MAX_DRAFTS) throw new HttpError(409, 'drafts_limit');
       }
       const id = repo.insertRow(c.db, 'features', {
         ...fields,
@@ -231,6 +234,37 @@ module.exports = [
         updated_by: c.user.id,
         updated_at: sqlTime(c.now()),
       });
+      return { body: repo.getFeature(c.db, id, c.user) };
+    },
+  },
+  {
+    method: 'POST',
+    pattern: '/api/features/:id/submit',
+    handler: async (c) => {
+      if (!c.user) throw new HttpError(401, 'login required');
+      const id = idParam(c);
+      const row = repo.rawFeature(c.db, id);
+      // Someone else's object, a sent one and a missing one look the same.
+      if (!row || !can(c.user, 'feature:submit', row)) throw new HttpError(404, 'feature not found');
+      if (!can(c.user, 'feature:propose')) throw new HttpError(403, 'proposals_blocked');
+      limitProposalWrites(c);
+      if (repo.countOpenProposals(c.db, c.user.id) >= MAX_OPEN_PROPOSALS) throw new HttpError(409, 'proposals_limit');
+      // Empty / duplicate / frequent proposals are not refused: they go to the separate flagged queue.
+      const flag = classifySubmission(c.db, row, c.now());
+      repo.updateRow(c.db, 'features', id, { submitted_at: sqlTime(c.now()), flag, updated_at: sqlTime(c.now()) });
+      return { body: repo.getFeature(c.db, id, c.user) };
+    },
+  },
+  {
+    method: 'POST',
+    pattern: '/api/features/:id/withdraw',
+    handler: async (c) => {
+      if (!c.user) throw new HttpError(401, 'login required');
+      const id = idParam(c);
+      const row = repo.rawFeature(c.db, id);
+      if (!row || !can(c.user, 'feature:withdraw', row)) throw new HttpError(404, 'feature not found');
+      limitProposalWrites(c);
+      repo.updateRow(c.db, 'features', id, { submitted_at: null, flag: null, updated_at: sqlTime(c.now()) });
       return { body: repo.getFeature(c.db, id, c.user) };
     },
   },

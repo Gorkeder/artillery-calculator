@@ -61,6 +61,7 @@ module.exports = [
       const row = repo.rawFeature(c.db, id);
       if (!row) throw new HttpError(404, 'feature not found');
       if (row.status !== 'pending') throw new HttpError(409, 'already published');
+      if (!row.submitted_at) throw new HttpError(409, 'not submitted');
       repo.updateRow(c.db, 'features', id, {
         status: 'approved',
         reject_reason: null,
@@ -80,12 +81,29 @@ module.exports = [
       if (!row) throw new HttpError(404, 'feature not found');
       const reason = requiredReason(await readJson(c.req));
       if (row.status !== 'pending') throw new HttpError(409, 'a published object cannot be rejected');
+      if (!row.submitted_at) throw new HttpError(409, 'not submitted');
       repo.updateRow(c.db, 'features', id, {
         reject_reason: reason,
         reviewed_at: sqlTime(c.now()),
         reviewed_by: c.user.id,
       });
       return { body: repo.getFeature(c.db, id, c.user) };
+    },
+  },
+  {
+    // One decision for everything the automatic checks flagged (empty, duplicate, frequent).
+    method: 'POST',
+    pattern: '/api/moderation/reject-flagged',
+    handler: async (c) => {
+      need(c, 'moderation:write');
+      const reason = requiredReason(await readJson(c.req));
+      const r = c.db
+        .prepare(
+          `UPDATE features SET reject_reason = ?, reviewed_at = ?, reviewed_by = ?
+           WHERE status = 'pending' AND submitted_at IS NOT NULL AND flag IS NOT NULL AND reject_reason IS NULL`,
+        )
+        .run(reason, sqlTime(c.now()), c.user.id);
+      return { body: { ok: true, rejected: Number(r.changes) } };
     },
   },
   {

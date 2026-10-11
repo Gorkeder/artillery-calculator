@@ -126,6 +126,16 @@ CREATE UNIQUE INDEX idx_reports_one_open ON reports(feature_id, user_id) WHERE r
 CREATE INDEX idx_features_status ON features(status, reviewed_at);
 `,
   },
+  {
+    // A proposal now starts as a draft (submitted_at NULL) and is sent to moderation explicitly.
+    // Proposals that were already waiting stay in the queue: they count as sent.
+    version: 5,
+    sql: `
+ALTER TABLE features ADD COLUMN submitted_at TEXT;
+ALTER TABLE features ADD COLUMN flag TEXT;
+UPDATE features SET submitted_at = COALESCE(updated_at, datetime('now')) WHERE status = 'pending';
+`,
+  },
 ];
 
 function migrate(db) {

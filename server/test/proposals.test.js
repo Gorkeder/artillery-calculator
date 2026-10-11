@@ -29,11 +29,17 @@ const propose = (ctx, cookie, over) => ctx.s.api('POST', '/api/features', { cook
 const features = async (ctx, cookie) => (await ctx.s.api('GET', '/api/maps/main', { cookie })).json.features;
 const block = (ctx, userId, reason = 'spam') =>
   ctx.s.db.prepare("UPDATE users SET proposals_blocked_at = datetime('now'), proposals_block_reason = ? WHERE id = ?").run(reason, userId);
-// Inserts a feature straight into the DB: { status, rejectReason, author }.
-function seedFeature(ctx, { status = 'approved', rejectReason = null, author = ctx.alice, title = 'Seed', category = ctx.pointCat, reviewedAt = null } = {}) {
+// Inserts a feature straight into the DB. A pending one counts as already sent to moderation unless `draft`.
+function seedFeature(ctx, {
+  status = 'approved', rejectReason = null, author = ctx.alice, title = 'Seed', category = ctx.pointCat,
+  reviewedAt = null, draft = false, flag = null, submittedAt = null, x = 0.1, y = 0.1, geometry = null,
+} = {}) {
+  const sent = status === 'pending' && !draft;
   return repo.insertRow(ctx.s.db, 'features', {
-    map_id: ctx.mapId, category_id: category, geometry: JSON.stringify({ x: 0.1, y: 0.1 }),
+    map_id: ctx.mapId, category_id: category, geometry: JSON.stringify(geometry || { x, y }),
     title, status, reject_reason: rejectReason, author_id: author, reviewed_at: reviewedAt,
+    submitted_at: sent ? (submittedAt || new Date().toISOString().slice(0, 19).replace('T', ' ')) : null,
+    flag,
   });
 }
 
@@ -50,7 +56,7 @@ test('migration 4 upgrades a version 3 database without losing data', () => {
   db.exec(`INSERT INTO features (map_id, category_id, geometry, title, status, author_id)
            VALUES (1, 1, '{"x":0,"y":0}', 'F', 'pending', 1)`);
   migrate(db);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 4);
+  assert.ok(db.prepare('PRAGMA user_version').get().user_version >= 4);
   const f = db.prepare('SELECT title, status, reject_reason, reviewed_at, reviewed_by FROM features').get();
   assert.deepEqual({ ...f }, { title: 'F', status: 'pending', reject_reason: null, reviewed_at: null, reviewed_by: null });
   const u = db.prepare('SELECT login, proposals_blocked_at, proposals_block_reason FROM users').get();
@@ -107,17 +113,6 @@ test('guests, blocked authors and unpublished maps cannot receive proposals', as
   assert.equal(r.status, 403);
   assert.equal(r.json.error, 'proposals_blocked');
   assert.equal((await propose(ctx, ctx.bobCookie)).status, 201, 'other users are unaffected');
-});
-
-test('at most 10 open proposals per user; rejected ones do not count', async (t) => {
-  const ctx = await setup(t);
-  for (let i = 0; i < 10; i++) seedFeature(ctx, { status: 'pending', title: 'P' + i });
-  const over = await propose(ctx, ctx.aliceCookie);
-  assert.equal(over.status, 409);
-  assert.equal(over.json.error, 'proposals_limit');
-  ctx.s.db.prepare("UPDATE features SET reject_reason = 'no' WHERE author_id = ? AND title = 'P0'").run(ctx.alice);
-  assert.equal((await propose(ctx, ctx.aliceCookie)).status, 201, 'a rejected proposal frees a slot');
-  assert.equal((await propose(ctx, ctx.bobCookie)).status, 201, 'the limit is per user');
 });
 
 test('an author edits only their own open proposal', async (t) => {
@@ -430,4 +425,197 @@ test('the queue also lists rejected proposals, so a decision (or an automatic bl
   assert.equal(ok.status, 200);
   const after = await ctx.s.api('GET', '/api/moderation', { cookie: ctx.s.adminCookie });
   assert.deepEqual(after.json.rejected, []);
+});
+
+// ---------- drafts, submission and classification ----------
+
+const submit = (ctx, id, cookie) => post(ctx, `/api/features/${id}/submit`, cookie);
+const withdraw = (ctx, id, cookie) => post(ctx, `/api/features/${id}/withdraw`, cookie);
+const queue = async (ctx) => (await ctx.s.api('GET', '/api/moderation', { cookie: ctx.s.adminCookie })).json;
+const rowOf = (ctx, id) => repo.rawFeature(ctx.s.db, id);
+
+test('a new proposal is a draft: not in the queue, invisible to others, editable by its author', async (t) => {
+  const ctx = await setup(t);
+  const p = (await propose(ctx, ctx.aliceCookie)).json;
+  assert.equal(p.submitted, false);
+  assert.equal(rowOf(ctx, p.id).submitted_at, null);
+  const q = await queue(ctx);
+  assert.deepEqual(q.proposals, []);
+  assert.deepEqual(q.flagged, []);
+  assert.deepEqual(await features(ctx, ctx.bobCookie), []);
+  assert.equal((await features(ctx, ctx.aliceCookie)).length, 1, 'the author sees their draft');
+});
+
+test('submitting sends a filled draft to the main queue and locks it; withdraw makes it a draft again', async (t) => {
+  const ctx = await setup(t);
+  const p = (await propose(ctx, ctx.aliceCookie, { title: 'Cache A' })).json;
+  const sent = await submit(ctx, p.id, ctx.aliceCookie);
+  assert.equal(sent.status, 200);
+  assert.equal(sent.json.submitted, true);
+  assert.equal('flag' in sent.json, false, 'the author is never told the classification');
+  assert.equal(rowOf(ctx, p.id).flag, null);
+  assert.deepEqual((await queue(ctx)).proposals.map((x) => x.id), [p.id]);
+  const url = '/api/features/' + p.id;
+  assert.equal((await ctx.s.api('PATCH', url, { cookie: ctx.aliceCookie, body: { title: 'sneaky' } })).status, 404, 'locked once sent');
+  assert.equal((await submit(ctx, p.id, ctx.aliceCookie)).status, 404, 'cannot be sent twice');
+  const back = await withdraw(ctx, p.id, ctx.aliceCookie);
+  assert.equal(back.status, 200);
+  assert.equal(back.json.submitted, false);
+  assert.deepEqual((await queue(ctx)).proposals, []);
+  assert.equal((await ctx.s.api('PATCH', url, { cookie: ctx.aliceCookie, body: { title: 'edited' } })).status, 200);
+  assert.equal((await withdraw(ctx, p.id, ctx.aliceCookie)).status, 404, 'a draft cannot be withdrawn');
+});
+
+test('only the author sends or withdraws; guests and blocked authors cannot', async (t) => {
+  const ctx = await setup(t);
+  const p = (await propose(ctx, ctx.aliceCookie, { title: 'Cache A' })).json;
+  assert.equal((await submit(ctx, p.id, undefined)).status, 401);
+  assert.equal((await submit(ctx, p.id, ctx.bobCookie)).status, 404);
+  assert.equal((await submit(ctx, 99999, ctx.aliceCookie)).status, 404);
+  block(ctx, ctx.alice);
+  const r = await submit(ctx, p.id, ctx.aliceCookie);
+  assert.equal(r.status, 403);
+  assert.equal(r.json.error, 'proposals_blocked');
+  assert.equal(rowOf(ctx, p.id).submitted_at, null);
+});
+
+test('an empty draft goes to the flagged queue, not to the main one', async (t) => {
+  const ctx = await setup(t);
+  const p = (await propose(ctx, ctx.aliceCookie, { title: '  ', description: '' })).json;
+  const sent = await submit(ctx, p.id, ctx.aliceCookie);
+  assert.equal(sent.status, 200);
+  assert.equal(rowOf(ctx, p.id).flag, 'empty');
+  const q = await queue(ctx);
+  assert.deepEqual(q.proposals, []);
+  assert.deepEqual(q.flagged.map((x) => [x.id, x.flag]), [[p.id, 'empty']]);
+  const mine = (await features(ctx, ctx.aliceCookie)).find((f) => f.id === p.id);
+  assert.equal(mine.submitted, true);
+  assert.equal('flag' in mine, false);
+});
+
+test('a duplicate of an existing or waiting object of the same category is flagged', async (t) => {
+  const ctx = await setup(t);
+  seedFeature(ctx, { status: 'approved', author: ctx.bob, title: 'Existing', x: 0.4, y: 0.4 });
+  const near = (await propose(ctx, ctx.aliceCookie, { geometry: { x: 0.401, y: 0.4 }, title: 'Same place' })).json;
+  const far = (await propose(ctx, ctx.aliceCookie, { geometry: { x: 0.6, y: 0.6 }, title: 'Elsewhere' })).json;
+  await submit(ctx, near.id, ctx.aliceCookie);
+  await submit(ctx, far.id, ctx.aliceCookie);
+  assert.equal(rowOf(ctx, near.id).flag, 'duplicate');
+  assert.equal(rowOf(ctx, far.id).flag, null);
+  // Another category at the same spot is not a duplicate; a waiting proposal counts as an existing object.
+  const other = (await propose(ctx, ctx.bobCookie, { category_id: ctx.polyCat, geometry: { points: [[0.39, 0.39], [0.42, 0.39], [0.4, 0.42]] }, title: 'Zone' })).json;
+  await submit(ctx, other.id, ctx.bobCookie);
+  assert.equal(rowOf(ctx, other.id).flag, null);
+  const again = (await propose(ctx, ctx.bobCookie, { geometry: { x: 0.6, y: 0.601 }, title: 'Echo of far' })).json;
+  await submit(ctx, again.id, ctx.bobCookie);
+  assert.equal(rowOf(ctx, again.id).flag, 'duplicate', 'a waiting proposal is a candidate too');
+});
+
+test('a polygon is compared by the centre of its vertices', async (t) => {
+  const ctx = await setup(t);
+  seedFeature(ctx, {
+    status: 'approved', author: ctx.bob, category: ctx.polyCat, title: 'Zone',
+    geometry: { points: [[0.2, 0.2], [0.4, 0.2], [0.3, 0.4]] },
+  });
+  const p = (await propose(ctx, ctx.aliceCookie, {
+    category_id: ctx.polyCat, geometry: { points: [[0.2, 0.2], [0.4, 0.2], [0.3, 0.401]] }, title: 'Zone again',
+  })).json;
+  await submit(ctx, p.id, ctx.aliceCookie);
+  assert.equal(rowOf(ctx, p.id).flag, 'duplicate');
+});
+
+test('the sixth submission within ten minutes is flagged as frequent; older ones do not count', async (t) => {
+  const ctx = await setup(t);
+  const stamp = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+  for (let i = 0; i < 5; i++) {
+    seedFeature(ctx, { status: 'pending', title: 'S' + i, x: 0.8 + i * 0.02, y: 0.1, submittedAt: stamp(Date.now() - 60 * 1000) });
+  }
+  const p = (await propose(ctx, ctx.aliceCookie, { geometry: { x: 0.2, y: 0.9 }, title: 'Sixth' })).json;
+  // 5 open proposals is below the limit of 10, so the submission itself is accepted.
+  assert.equal((await submit(ctx, p.id, ctx.aliceCookie)).status, 200);
+  assert.equal(rowOf(ctx, p.id).flag, 'frequency');
+  // The same five, but sent more than ten minutes ago, do not make a burst.
+  const ctx2 = await setup(t);
+  for (let i = 0; i < 5; i++) {
+    seedFeature(ctx2, { status: 'pending', title: 'S' + i, x: 0.8 + i * 0.02, y: 0.1, submittedAt: stamp(Date.now() - 11 * 60 * 1000) });
+  }
+  const q = (await propose(ctx2, ctx2.aliceCookie, { geometry: { x: 0.2, y: 0.9 }, title: 'Sixth' })).json;
+  await submit(ctx2, q.id, ctx2.aliceCookie);
+  assert.equal(rowOf(ctx2, q.id).flag, null);
+});
+
+test('empty beats duplicate when both apply', async (t) => {
+  const ctx = await setup(t);
+  seedFeature(ctx, { status: 'approved', author: ctx.bob, x: 0.4, y: 0.4 });
+  const p = (await propose(ctx, ctx.aliceCookie, { geometry: { x: 0.4, y: 0.4 }, title: '', description: '' })).json;
+  await submit(ctx, p.id, ctx.aliceCookie);
+  assert.equal(rowOf(ctx, p.id).flag, 'empty');
+});
+
+test('at most 20 drafts and 10 waiting proposals per user; rejected ones free the slots', async (t) => {
+  const ctx = await setup(t);
+  for (let i = 0; i < 20; i++) seedFeature(ctx, { status: 'pending', draft: true, title: 'D' + i, x: i / 100, y: 0.5 });
+  const over = await propose(ctx, ctx.aliceCookie);
+  assert.equal(over.status, 409);
+  assert.equal(over.json.error, 'drafts_limit');
+  ctx.s.db.prepare("UPDATE features SET reject_reason = 'no' WHERE title = 'D0'").run();
+  const ok = (await propose(ctx, ctx.aliceCookie, { geometry: { x: 0.9, y: 0.9 }, title: 'Fresh' }));
+  assert.equal(ok.status, 201, 'a rejected draft frees a slot');
+  assert.equal((await propose(ctx, ctx.bobCookie)).status, 201, 'the limit is per user');
+  // Waiting proposals: 10 already sent, the 11th cannot be submitted.
+  const ctx2 = await setup(t);
+  for (let i = 0; i < 10; i++) seedFeature(ctx2, { status: 'pending', title: 'W' + i, x: i / 20, y: 0.5 });
+  const d = (await propose(ctx2, ctx2.aliceCookie, { geometry: { x: 0.9, y: 0.1 }, title: 'Eleventh' })).json;
+  const r = await submit(ctx2, d.id, ctx2.aliceCookie);
+  assert.equal(r.status, 409);
+  assert.equal(r.json.error, 'proposals_limit');
+  assert.equal(rowOf(ctx2, d.id).submitted_at, null);
+});
+
+test('reject-flagged rejects every flagged proposal with one reason and nothing else', async (t) => {
+  const ctx = await setup(t);
+  const flaggedA = seedFeature(ctx, { status: 'pending', flag: 'empty', title: '' });
+  const flaggedB = seedFeature(ctx, { status: 'pending', flag: 'duplicate', title: 'Dup', x: 0.5, y: 0.5 });
+  const clean = seedFeature(ctx, { status: 'pending', title: 'Clean', x: 0.7, y: 0.7 });
+  const draft = seedFeature(ctx, { status: 'pending', draft: true, flag: 'empty', title: 'Draft', x: 0.9, y: 0.9 });
+  assert.equal((await post(ctx, '/api/moderation/reject-flagged', ctx.aliceCookie, { reason: 'x' })).status, 403);
+  assert.equal((await post(ctx, '/api/moderation/reject-flagged', ctx.s.adminCookie, {})).status, 400);
+  const r = await post(ctx, '/api/moderation/reject-flagged', ctx.s.adminCookie, { reason: 'Спам' });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.rejected, 2);
+  assert.equal(rowOf(ctx, flaggedA).reject_reason, 'Спам');
+  assert.equal(rowOf(ctx, flaggedB).reject_reason, 'Спам');
+  assert.equal(rowOf(ctx, clean).reject_reason, null);
+  assert.equal(rowOf(ctx, draft).reject_reason, null, 'a draft was never sent, so it is not the admin\'s business');
+  assert.deepEqual((await queue(ctx)).proposals.map((x) => x.id), [clean]);
+});
+
+test('the admin cannot approve or reject a draft, and never-sent objects stay out of the rejected list', async (t) => {
+  const ctx = await setup(t);
+  const draft = seedFeature(ctx, { status: 'pending', draft: true, title: 'Draft' });
+  assert.equal((await post(ctx, `/api/features/${draft}/approve`, ctx.s.adminCookie)).status, 409);
+  assert.equal((await post(ctx, `/api/features/${draft}/reject`, ctx.s.adminCookie, { reason: 'x' })).status, 409);
+  // Blocking the author also closes their drafts; those do not clutter the rejected tab.
+  await post(ctx, `/api/users/${ctx.alice}/block-proposals`, ctx.s.adminCookie, { reason: 'spam' });
+  assert.equal(rowOf(ctx, draft).reject_reason, 'Автор заблокирован');
+  assert.deepEqual((await queue(ctx)).rejected, []);
+});
+
+test('migration 5 marks proposals that were already waiting as submitted', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(SCHEMA);
+  for (const m of MIGRATIONS.filter((x) => x.version <= 4)) db.exec(m.sql);
+  db.exec('PRAGMA user_version = 4');
+  db.exec("INSERT INTO users (login, password_hash, role) VALUES ('old', 'x', 'user')");
+  db.exec("INSERT INTO maps (slug, title, published) VALUES ('m', 'M', 1)");
+  db.exec("INSERT INTO categories (map_id, name, shape) VALUES (1, 'C', 'point')");
+  db.exec(`INSERT INTO features (map_id, category_id, geometry, title, status, author_id)
+           VALUES (1, 1, '{"x":0,"y":0}', 'Waiting', 'pending', 1), (1, 1, '{"x":0.5,"y":0.5}', 'Public', 'approved', 1)`);
+  migrate(db);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 5);
+  const rows = db.prepare('SELECT title, submitted_at, flag FROM features ORDER BY id').all().map((r) => ({ ...r }));
+  assert.ok(rows[0].submitted_at, 'a waiting proposal stays in the queue');
+  assert.equal(rows[0].flag, null);
+  assert.equal(rows[1].submitted_at, null);
+  db.close();
 });

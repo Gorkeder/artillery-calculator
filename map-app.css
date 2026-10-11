@@ -150,6 +150,7 @@ body.editing #props-slot { display: block; }
 .mod-row { align-items: flex-start; flex-wrap: wrap; }
 .mod-info { flex: 1 1 260px; min-width: 0; }
 .mod-text { white-space: pre-wrap; margin-top: 4px; }
+.chip { display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 10px; font-size: 12px; background: #2e1c18; color: var(--danger); }
 
 @media (max-width: 720px) {
   .only-narrow { display: inline-block; }

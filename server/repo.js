@@ -47,9 +47,14 @@ function featureOut(r, images, viewer) {
     status: r.status,
     reject_reason: admin || mine ? r.reject_reason || null : null,
     mine,
+    // Drafts are not sent to moderation yet; `flag` is the automatic classification and stays admin-only.
+    submitted: r.submitted_at != null,
     images: images || [],
   };
-  if (admin) out.author_id = r.author_id;
+  if (admin) {
+    out.author_id = r.author_id;
+    out.flag = r.flag || null;
+  }
   return out;
 }
 
@@ -128,10 +133,23 @@ function getFeature(db, id, viewer) {
   return featureOut(r, imgs.get(id), viewer);
 }
 
-// Proposals that still wait for a decision (a rejected one no longer counts against the limit).
+// Proposals sent to moderation that still wait for a decision (a rejected one no longer counts).
 function countOpenProposals(db, userId) {
   return db
-    .prepare("SELECT COUNT(*) AS n FROM features WHERE author_id = ? AND status = 'pending' AND reject_reason IS NULL")
+    .prepare(
+      `SELECT COUNT(*) AS n FROM features
+       WHERE author_id = ? AND status = 'pending' AND submitted_at IS NOT NULL AND reject_reason IS NULL`,
+    )
+    .get(userId).n;
+}
+
+// Objects the author placed but has not sent yet.
+function countDrafts(db, userId) {
+  return db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM features
+       WHERE author_id = ? AND status = 'pending' AND submitted_at IS NULL AND reject_reason IS NULL`,
+    )
     .get(userId).n;
 }
 
@@ -219,19 +237,21 @@ function countMarks(db, userId) {
 // Everything the moderation dialog needs, in one round trip. Only open proposals are listed:
 // a rejected one is waiting for its author to delete it, not for a decision.
 function moderationOverview(db) {
-  const proposals = db
-    .prepare(
-      `SELECT f.id, f.map_id, m.slug AS map_slug, m.title AS map_title, f.category_id, c.name AS category_name,
-              c.shape, f.title, f.description, f.geometry, f.author_id, u.login AS author_login, f.updated_at
-       FROM features f
-       JOIN maps m ON m.id = f.map_id
-       JOIN categories c ON c.id = f.category_id
-       LEFT JOIN users u ON u.id = f.author_id
-       WHERE f.status = 'pending' AND f.reject_reason IS NULL
-       ORDER BY f.id`,
-    )
-    .all()
-    .map((r) => ({ ...r, geometry: JSON.parse(r.geometry) }));
+  // Drafts (never sent) are the author's business and never appear here. Sent proposals split into the
+  // main queue and the flagged one (empty / duplicate / frequent), which the admin can clear in bulk.
+  const queueSql = (flagged) =>
+    `SELECT f.id, f.map_id, m.slug AS map_slug, m.title AS map_title, f.category_id, c.name AS category_name,
+            c.shape, f.title, f.description, f.geometry, f.author_id, u.login AS author_login, f.updated_at, f.flag
+     FROM features f
+     JOIN maps m ON m.id = f.map_id
+     JOIN categories c ON c.id = f.category_id
+     LEFT JOIN users u ON u.id = f.author_id
+     WHERE f.status = 'pending' AND f.submitted_at IS NOT NULL AND f.reject_reason IS NULL
+       AND f.flag IS ${flagged ? 'NOT ' : ''}NULL
+     ORDER BY f.id`;
+  const rows = (sql) => db.prepare(sql).all().map((r) => ({ ...r, geometry: JSON.parse(r.geometry) }));
+  const proposals = rows(queueSql(false));
+  const flagged = rows(queueSql(true));
   // Rejected ones stay reachable so an admin can reverse a decision (or an automatic rejection after a block).
   const rejected = db
     .prepare(
@@ -241,7 +261,7 @@ function moderationOverview(db) {
        JOIN maps m ON m.id = f.map_id
        JOIN categories c ON c.id = f.category_id
        LEFT JOIN users u ON u.id = f.author_id
-       WHERE f.status = 'pending' AND f.reject_reason IS NOT NULL
+       WHERE f.status = 'pending' AND f.submitted_at IS NOT NULL AND f.reject_reason IS NOT NULL
        ORDER BY f.reviewed_at DESC, f.id DESC
        LIMIT 100`,
     )
@@ -267,7 +287,7 @@ function moderationOverview(db) {
     )
     .all()
     .map((r) => ({ ...r }));
-  return { proposals, rejected, reports, blocked };
+  return { proposals, flagged, rejected, reports, blocked };
 }
 
 module.exports = {
@@ -293,5 +313,6 @@ module.exports = {
   getMarkRaw,
   countMarks,
   countOpenProposals,
+  countDrafts,
   moderationOverview,
 };

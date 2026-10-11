@@ -55,7 +55,7 @@ test('migration v2 upgrades a v1 database and keeps the admin verified', () => {
   const u = db.prepare('SELECT email, email_verified_at, created_at FROM users').get();
   assert.equal(u.email, null);
   assert.equal(u.email_verified_at, u.created_at);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 4);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 5);
   assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE name = 'auth_tokens'").get());
   const s = db.prepare('SELECT created_at, last_seen_at, ip, user_agent FROM sessions').get();
   assert.equal(s.created_at, 0);

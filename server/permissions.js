@@ -12,6 +12,8 @@ const ACTIONS = new Set([
   'mark:delete',
   'feature:propose',
   'report:create',
+  'feature:submit',
+  'feature:withdraw',
   'moderation:read',
   'moderation:write',
 ]);
@@ -32,8 +34,15 @@ function can(user, action, resource) {
     case 'report:create':
       return !user.proposalsBlocked;
     case 'feature:update':
+      // A user edits only a draft: once sent, the proposal is frozen (withdraw it to edit again).
       return admin || (Boolean(resource) && resource.author_id === user.id
-        && resource.status === 'pending' && !resource.reject_reason);
+        && resource.status === 'pending' && !resource.reject_reason && !resource.submitted_at);
+    case 'feature:submit':
+      return Boolean(resource) && resource.author_id === user.id
+        && resource.status === 'pending' && !resource.reject_reason && !resource.submitted_at;
+    case 'feature:withdraw':
+      return Boolean(resource) && resource.author_id === user.id
+        && resource.status === 'pending' && !resource.reject_reason && Boolean(resource.submitted_at);
     case 'feature:delete':
       return admin || (Boolean(resource) && resource.author_id === user.id && resource.status === 'pending');
     default:

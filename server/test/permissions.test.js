@@ -78,3 +78,24 @@ test('featureFilter: admin sees all, user sees approved + own, anonymous only ap
   assert.deepEqual(featureFilter(user), { all: false, authorId: 2 });
   assert.deepEqual(featureFilter(null), { all: false, authorId: null });
 });
+
+test('drafts: only the author edits a draft; sending and withdrawing follow the state', () => {
+  const draft = { id: 1, author_id: 2, status: 'pending', reject_reason: null, submitted_at: null };
+  const sent = { id: 2, author_id: 2, status: 'pending', reject_reason: null, submitted_at: '2026-10-11 10:00:00' };
+  const rejected = { id: 3, author_id: 2, status: 'pending', reject_reason: 'dup', submitted_at: '2026-10-11 10:00:00' };
+  const foreign = { id: 4, author_id: 9, status: 'pending', reject_reason: null, submitted_at: null };
+  assert.equal(can(user, 'feature:update', draft), true);
+  assert.equal(can(user, 'feature:update', sent), false, 'locked once sent');
+  assert.equal(can(user, 'feature:update', rejected), false);
+  assert.equal(can(admin, 'feature:update', sent), true);
+  assert.equal(can(user, 'feature:submit', draft), true);
+  assert.equal(can(user, 'feature:submit', sent), false);
+  assert.equal(can(user, 'feature:submit', rejected), false);
+  assert.equal(can(user, 'feature:submit', foreign), false);
+  assert.equal(can(user, 'feature:withdraw', sent), true);
+  assert.equal(can(user, 'feature:withdraw', draft), false);
+  assert.equal(can(user, 'feature:withdraw', rejected), false);
+  assert.equal(can(user, 'feature:withdraw', foreign), false);
+  assert.equal(can(user, 'feature:delete', sent), true, 'a sent proposal can still be deleted');
+  assert.equal(can(null, 'feature:submit', draft), false);
+});

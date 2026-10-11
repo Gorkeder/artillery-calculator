@@ -178,7 +178,8 @@
   // "На модерации" / "Отклонено: причина" for the author's own unpublished object.
   function statusLine(feature) {
     if (feature.status !== 'pending') return null;
-    var text = feature.reject_reason ? 'Отклонено: ' + feature.reject_reason : 'На модерации';
+    var text = feature.reject_reason ? 'Отклонено: ' + feature.reject_reason
+      : (feature.submitted ? 'На модерации' : 'Черновик: ещё не отправлен на модерацию');
     return h('div', { class: 'card-status' + (feature.reject_reason ? ' rejected' : '') }, text);
   }
 
