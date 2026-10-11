@@ -12,9 +12,12 @@ function register(s, over = {}) {
 }
 
 async function registerAndVerify(s, over = {}) {
+  const creds = { ...GOOD, ...over };
   await register(s, over);
   const res = await s.api('POST', '/api/verify-email', { body: { token: s.lastToken('verify') } });
-  return { res, cookie: res.headers.get('set-cookie').split(';')[0] };
+  // Verification no longer opens a session: sign in explicitly, as a real user must.
+  const login = await s.api('POST', '/api/login', { body: { login: creds.login, password: creds.password } });
+  return { res, cookie: login.headers.get('set-cookie').split(';')[0] };
 }
 
 test('register creates an unverified user and mails a verification link', async (t) => {
@@ -35,21 +38,27 @@ test('register creates an unverified user and mails a verification link', async 
   assert.equal(login.json.error, 'email_not_verified');
 });
 
-test('verify-email confirms once, opens a session and the token cannot be reused', async (t) => {
+test('verify-email confirms once, does NOT open a session and the token cannot be reused', async (t) => {
   const s = await startTestServer();
   t.after(() => s.cleanup());
-  const { res, cookie } = await registerAndVerify(s);
+  await register(s);
+  const res = await s.api('POST', '/api/verify-email', { body: { token: s.lastToken('verify') } });
   assert.equal(res.status, 200);
-  assert.equal(res.json.user.login, 'newbie');
-  assert.equal(res.json.user.emailVerified, true);
-  const me = await s.api('GET', '/api/me', { cookie });
-  assert.equal(me.json.user.login, 'newbie');
-  assert.deepEqual(me.json.can, { map: false, category: false, feature: false });
+  assert.deepEqual(res.json, { ok: true });
+  assert.equal(res.headers.get('set-cookie'), null, 'no session cookie');
+  const u = s.db.prepare("SELECT email_verified_at FROM users WHERE login = 'newbie'").get();
+  assert.ok(u.email_verified_at);
+  const sessions = s.db
+    .prepare('SELECT COUNT(*) AS n FROM sessions WHERE user_id = (SELECT id FROM users WHERE login = ?)')
+    .get('newbie').n;
+  assert.equal(sessions, 0);
   const again = await s.api('POST', '/api/verify-email', { body: { token: s.lastToken('verify') } });
   assert.equal(again.status, 400);
   assert.equal(again.json.error, 'token_invalid');
   const login = await s.api('POST', '/api/login', { body: { login: 'newbie@example.com', password: 'longenough1' } });
   assert.equal(login.status, 200);
+  const me = await s.api('GET', '/api/me', { cookie: login.headers.get('set-cookie').split(';')[0] });
+  assert.equal(me.json.user.login, 'newbie');
 });
 
 test('an expired verification token is refused', async (t) => {
@@ -161,7 +170,7 @@ test('an email held by a stale unverified account is taken over by the new regis
   assert.equal(stale.json.error, 'token_invalid');
   const ok = await s.api('POST', '/api/verify-email', { body: { token: s.lastToken('verify') } });
   assert.equal(ok.status, 200);
-  assert.equal(ok.json.user.login, 'replacer');
+  assert.deepEqual(ok.json, { ok: true });
   const login = await s.api('POST', '/api/login', { body: { login: 'replacer', password: 'replacer-pass-1' } });
   assert.equal(login.status, 200);
 });

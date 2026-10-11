@@ -1,11 +1,10 @@
 'use strict';
 
 const { HttpError, readJson } = require('../http-util');
-const { hashPassword, verifyPassword, createSession, sessionCookie, clearCookie, sha256 } = require('../auth');
+const { hashPassword, verifyPassword, clearCookie, sha256 } = require('../auth');
 const { normalizeEmail, checkLogin, checkPassword } = require('../account-rules');
 const { issueToken, peekToken, consumeToken } = require('../tokens');
 const { verifyEmailMessage, resetPasswordMessage } = require('../mail-templates');
-const { meBody } = require('../me');
 
 const GENERIC = { ok: true };
 
@@ -111,11 +110,10 @@ const routes = [
       c.db
         .prepare("UPDATE users SET email_verified_at = datetime('now') WHERE id = ? AND email_verified_at IS NULL")
         .run(userId);
-      const user = c.db.prepare('SELECT id, login, role FROM users WHERE id = ?').get(userId);
-      if (!user) throw new HttpError(400, 'token_invalid');
-      const session = createSession(c.db, userId, c.now(), undefined, c.clientMeta);
-      c.headers['Set-Cookie'] = sessionCookie(session, { secure: c.cookieSecure });
-      return { body: meBody(c.db, user) };
+      if (!c.db.prepare('SELECT 1 FROM users WHERE id = ?').get(userId)) throw new HttpError(400, 'token_invalid');
+      // No session here on purpose: whoever clicks the link may not be the person who typed the
+      // password (an attacker can register with someone else's address). Signing in is explicit.
+      return { body: { ok: true } };
     },
   },
   {

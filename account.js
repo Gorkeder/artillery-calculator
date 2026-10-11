@@ -171,8 +171,9 @@
 
   function showVerify(token) {
     show(h('h1', null, 'Подтверждение почты'), h('p', { class: 'muted' }, 'Проверяем ссылку…'));
-    api.post('/api/verify-email', { token: token }).then(function (me) {
-      afterLogin(me);
+    api.post('/api/verify-email', { token: token }).then(function () {
+      // Verification does not sign anyone in: the link may have been opened by someone else.
+      show(h('h1', null, 'Почта подтверждена'), h('p', { class: 'ok' }, 'Теперь войдите, указав логин и пароль.'), loginForm());
     }, function (ex) {
       var box = h('div', null, h('h1', null, 'Ссылка не сработала'), h('p', { class: 'err' }, errorText(ex)),
         h('div', { class: 'row' }, h('button', { type: 'button', class: 'primary', onclick: function () { showResend(''); } }, 'Выслать новую ссылку')));
