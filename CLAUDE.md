@@ -41,6 +41,11 @@ for them.
   карте, видны только автору; таблица `user_marks` (миграция 3), API `/api/my/marks`, слой и фильтр «Мои метки»,
   редактор на ПК, у админа переключатель «Общие / Мои метки»; подтверждение почты больше не открывает сессию.
   Спек и план — `docs/superpowers/specs|plans/2026-10-11-personal-marks*`, эксплуатация — `RELEASE.md`.
+- **Предложения пользователей и модерация (этап B)** (ветка `proposals-moderation`, ещё не влита в `master`): пользователь
+  предлагает новые объекты (статус `pending`, виден автору и админу) и жалуется на ошибки, админ модерирует очередь
+  в диалоге «Модерация» (одобрить, отклонить с причиной, заблокировать автора для предложений); миграция 4,
+  API `/api/moderation`, `/api/features/:id/approve|reject|report`, `/api/users/:id/block-proposals`.
+  Спек и план — `docs/superpowers/specs|plans/2026-10-11-proposals-moderation*`, эксплуатация — `RELEASE.md`.
 
 ### Не сделано / ждёт решения
 - Ветки `map-editor-spec` и `user-accounts` уже влиты в `master` (`git branch --merged`); влить ветку
@@ -55,7 +60,10 @@ for them.
   возврат на `/map`) и показать `/privacy` владельцу/юристу.
 - Перед анонсом личных меток руками пройти чек-лист из плана `2026-10-11-personal-marks.md` (Task 7: вершины,
   Esc/Delete, 375 px) и показать абзац про метки в `/privacy` владельцу/юристу.
-- Этап B: предложения точек с модерацией; смена почты, самоудаление аккаунта, соцсети, 2FA.
+- Перед анонсом предложений руками пройти чек-листы из плана `2026-10-11-proposals-moderation.md` (Tasks 6-8: фронтенд
+  не проверялся в браузере) и показать абзац про предложения в `/privacy` владельцу/юристу; влить ветку
+  `proposals-moderation` (после бэкапа БД: пуш в `master` деплоит миграцию 4).
+- Смена почты, самоудаление аккаунта, соцсети, 2FA.
 - Не вошло в v1 карты: отмена/повтор (Ctrl+Z), история изменений, импорт/экспорт, свои иконки, видео, массовое выделение.
 - Баннер cookie (152-ФЗ) не сделан.
 
@@ -80,6 +88,8 @@ for them.
   `map-geo.js` (pure geometry helpers, tested in `tools/map-geo.test.js`), `map-icons.js`,
   `map-app.js` (viewer), `map-editor.js` + `map-editor-dialogs.js` (editor), styles in `map-app.css`.
   Leaflet and Leaflet-Geoman are vendored in `vendor/` (no CDN). Geoman must load before `L.map()`.
+  Предложения и модерация: `server/routes/moderation.js`, диалог «Модерация» в `map-editor-dialogs.js`; предложения
+  идут через `/api/features` (статус `pending`), режим «Предложить» — тот же `map-editor.js`.
   Личные метки: `map-marks.js` (слой, фильтр, карточка) и `map-marks-editor.js` (рисование и правка, только ПК);
   сервер — `server/routes/marks.js`, таблица `user_marks`.
 - `server/` — Node 22+ API (`node:http` + `node:sqlite`, no npm deps) for maps, categories, features,
