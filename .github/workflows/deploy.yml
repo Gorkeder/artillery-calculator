@@ -35,6 +35,8 @@ jobs:
             --exclude '.gitattributes' \
             --exclude 'tools' \
             --exclude 'RELEASE.md' \
+            --exclude '*.md' \
+            --exclude '*.bak' \
             --exclude 'docs' \
             --exclude '.superpowers' \
             --exclude '.claude' \
