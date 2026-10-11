@@ -335,27 +335,14 @@
 
   function setupAuth() {
     var btn = $('auth-btn');
-    var dlg = $('login-dlg');
     var user = state.me.user;
     btn.hidden = false;
-    btn.textContent = user ? 'Выйти (' + user.login + ')' : '🔒';
-    btn.title = user ? 'Выйти' : 'Вход для редакторов';
+    btn.textContent = user ? user.login : 'Войти';
+    btn.title = user ? 'Аккаунт' : 'Вход и регистрация';
     btn.addEventListener('click', function () {
-      if (user) api.post('/api/logout', {}).then(function () { location.reload(); });
-      else dlg.showModal();
-    });
-    $('login-cancel').addEventListener('click', function () { dlg.close(); });
-    $('login-form').addEventListener('submit', function (e) {
-      e.preventDefault();
-      var form = e.target;
-      var err = $('login-err');
-      err.hidden = true;
-      api.post('/api/login', { login: form.login.value, password: form.password.value })
-        .then(function () { location.reload(); })
-        .catch(function (ex) {
-          err.textContent = ex.status === 429 ? 'Слишком много попыток, подождите.' : 'Неверный логин или пароль.';
-          err.hidden = false;
-        });
+      location.href = user
+        ? '/account'
+        : '/account?next=' + encodeURIComponent(location.pathname + location.search);
     });
   }
 
