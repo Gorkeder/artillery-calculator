@@ -291,6 +291,77 @@
     });
   }
 
+  // ---------- photos ----------
+
+  function resizeImage(file, maxSide) {
+    return createImageBitmap(file).catch(function () {
+      throw new Error('не удалось прочитать изображение');
+    }).then(function (bmp) {
+      var k = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+      var w = Math.max(1, Math.round(bmp.width * k));
+      var hgt = Math.max(1, Math.round(bmp.height * k));
+      var canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = hgt;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, w, hgt);
+      ctx.drawImage(bmp, 0, 0, w, hgt);
+      return new Promise(function (resolve, reject) {
+        canvas.toBlob(function (blob) {
+          if (blob) resolve(blob); else reject(new Error('не удалось сжать изображение'));
+        }, 'image/jpeg', 0.85);
+      });
+    });
+  }
+
+  function addPhotos(featureId, files) {
+    files.reduce(function (chain, file) {
+      return chain.then(function () {
+        return save(function () {
+          return resizeImage(file, 1600).then(function (blob) {
+            return api.upload('PUT', '/api/features/' + featureId + '/images', blob);
+          });
+        }).then(function (img) {
+          if (!img) return;
+          var f = V.featureById(featureId);
+          if (!f) return;
+          f.images = f.images.concat([img]);
+          V.setFeature(f, false);
+          if (ed.selectedId === featureId) renderPhotos(f);
+        });
+      });
+    }, Promise.resolve());
+  }
+
+  function removePhoto(featureId, imageId) {
+    save(function () { return api.del('/api/feature-images/' + imageId); }).then(function (r) {
+      if (!r) return;
+      var f = V.featureById(featureId);
+      if (!f) return;
+      f.images = f.images.filter(function (i) { return i.id !== imageId; });
+      V.setFeature(f, false);
+      if (ed.selectedId === featureId) renderPhotos(f);
+    });
+  }
+
+  function renderPhotos(f) {
+    els.photos.textContent = '';
+    f.images.forEach(function (img) {
+      els.photos.appendChild(h('div', { class: 'ph' },
+        h('img', { src: img.url, alt: '' }),
+        h('button', { type: 'button', title: 'Удалить фото', onclick: function () { removePhoto(f.id, img.id); } }, '×')));
+    });
+    if (f.images.length < 10) {
+      var input = h('input', {
+        type: 'file', accept: 'image/png,image/jpeg,image/webp', multiple: true, hidden: true,
+        onchange: function () { addPhotos(f.id, Array.prototype.slice.call(input.files)); input.value = ''; },
+      });
+      els.photos.appendChild(input);
+      els.photos.appendChild(h('button', { type: 'button', onclick: function () { input.click(); } }, '+ Фото'));
+    }
+  }
+
   // ---------- keyboard ----------
 
   function onKey(e) {
@@ -346,6 +417,7 @@
   window.MapEditor = {
     start: start,
     status: status,
+    renderPhotos: renderPhotos,
     save: save,
     selectedFeature: function () { return ed.selectedId === null ? null : V.featureById(ed.selectedId); },
     reselect: function () { if (ed.selectedId !== null) select(ed.selectedId); },
