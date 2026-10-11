@@ -33,7 +33,7 @@ test('sessions: valid token resolves user, token is stored hashed, expiry and de
   const uid = a.createUser(db, { login: 'admin', password: 'longenough', role: 'admin' });
   const token = a.createSession(db, uid, 1000, 5000);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM sessions WHERE token_hash = ?').get(token).n, 0);
-  assert.deepEqual({ ...a.getSessionUser(db, token, 2000) }, { id: uid, login: 'admin', role: 'admin' });
+  assert.deepEqual({ ...a.getSessionUser(db, token, 2000) }, { id: uid, login: 'admin', role: 'admin', proposalsBlocked: false });
   assert.equal(a.getSessionUser(db, token, 6000), null);
   const t2 = a.createSession(db, uid, 1000, 5000);
   a.destroySession(db, t2);

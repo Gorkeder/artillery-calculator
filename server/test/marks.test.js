@@ -2,11 +2,9 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
+const { DatabaseSync } = require('node:sqlite');
 const { startTestServer } = require('./helpers');
-const { openDb } = require('../db');
+const { SCHEMA, MIGRATIONS, migrate } = require('../db');
 const { createRateLimiter, createUser, createSession } = require('../auth');
 const repo = require('../repo');
 const v = require('../validate');
@@ -27,22 +25,17 @@ async function setup(t, opts) {
 // ---------- migration ----------
 
 test('migration 3 creates user_marks and keeps existing data when upgrading from version 2', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'anoma-mig-'));
-  const file = path.join(dir, 'a.db');
-  try {
-    let db = openDb(file);
-    createUser(db, { login: 'keeper', password: 'keeper-pass-1', role: 'user' });
-    db.exec('DROP TABLE user_marks');
-    db.exec('PRAGMA user_version = 2');
-    db.close();
-    db = openDb(file);
-    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 3);
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM users WHERE login = ?').get('keeper').n, 1);
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM user_marks').get().n, 0);
-    db.close();
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+  // Build a real version 2 database (schema + migrations up to 2) so later migrations apply on top of it.
+  const db = new DatabaseSync(':memory:');
+  db.exec(SCHEMA);
+  for (const m of MIGRATIONS.filter((x) => x.version <= 2)) db.exec(m.sql);
+  db.exec('PRAGMA user_version = 2');
+  db.exec("INSERT INTO users (login, password_hash, role) VALUES ('keeper', 'x', 'user')");
+  migrate(db);
+  assert.ok(db.prepare('PRAGMA user_version').get().user_version >= 3);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM users WHERE login = ?').get('keeper').n, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM user_marks').get().n, 0);
+  db.close();
 });
 
 test('deleting a user or a map deletes their marks', async (t) => {
