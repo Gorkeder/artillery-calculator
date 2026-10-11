@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { startTestServer } = require('./helpers');
-const { createRateLimiter } = require('../auth');
+const { createRateLimiter, createUser } = require('../auth');
 
 const GOOD = { login: 'newbie', email: 'newbie@example.com', password: 'longenough1', consent: true };
 
@@ -164,6 +164,8 @@ test('without a configured mailer registration answers 503 and creates nothing',
   assert.equal(r.status, 503);
   assert.equal(r.json.error, 'mail_not_configured');
   assert.equal(s.db.prepare("SELECT COUNT(*) AS n FROM users WHERE login = 'newbie'").get().n, 0);
+  assert.equal((await s.api('POST', '/api/forgot-password', { body: { email: 'a@b.cc' } })).status, 503);
+  assert.equal((await s.api('POST', '/api/resend-verification', { body: { email: 'a@b.cc' } })).status, 503);
 });
 
 test('a failing mailer does not break registration or leak a rejection', async (t) => {
@@ -205,4 +207,154 @@ test('a normal verified user still cannot write to the map', async (t) => {
   const { cookie } = await registerAndVerify(s);
   const r = await s.api('POST', '/api/maps', { cookie, body: { slug: 'x', title: 'X' } });
   assert.equal(r.status, 403);
+});
+
+test('forgot-password answers identically and mails only a known address', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  await registerAndVerify(s);
+  const before = s.mailer.sent.length;
+  const known = await s.api('POST', '/api/forgot-password', { body: { email: 'NewBie@example.com' } });
+  const unknown = await s.api('POST', '/api/forgot-password', { body: { email: 'ghost@example.com' } });
+  assert.equal(known.status, 200);
+  assert.deepEqual(known.json, unknown.json);
+  assert.equal(s.mailer.sent.length, before + 1);
+  assert.match(s.mailer.sent[before].text, /#reset=[0-9a-f]{64}/);
+});
+
+test('reset-password sets a new password, closes every session and burns the token', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  const { cookie } = await registerAndVerify(s);
+  await s.api('POST', '/api/forgot-password', { body: { email: 'newbie@example.com' } });
+  const token = s.lastToken('reset');
+  const tooShort = await s.api('POST', '/api/reset-password', { body: { token, password: 'short' } });
+  assert.equal(tooShort.json.error, 'password_short');
+  assert.equal(tooShort.status, 400, 'a rejected password does not burn the token (next call succeeds)');
+  const ok = await s.api('POST', '/api/reset-password', { body: { token, password: 'brand-new-pass' } });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get('set-cookie'), null, 'reset does not log the user in');
+  assert.equal((await s.api('GET', '/api/me', { cookie })).json.user, null);
+  const reuse = await s.api('POST', '/api/reset-password', { body: { token, password: 'another-pass-1' } });
+  assert.equal(reuse.status, 400);
+  assert.equal(reuse.json.error, 'token_invalid');
+  const login = await s.api('POST', '/api/login', { body: { login: 'newbie', password: 'brand-new-pass' } });
+  assert.equal(login.status, 200);
+});
+
+test('reset-password refuses a password equal to the login without burning the token', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  await registerAndVerify(s, { login: 'longlogin1' });
+  await s.api('POST', '/api/forgot-password', { body: { email: 'newbie@example.com' } });
+  const token = s.lastToken('reset');
+  const same = await s.api('POST', '/api/reset-password', { body: { token, password: 'LongLogin1' } });
+  assert.equal(same.status, 400);
+  assert.equal(same.json.error, 'password_equals_login');
+  const ok = await s.api('POST', '/api/reset-password', { body: { token, password: 'fresh-password-1' } });
+  assert.equal(ok.status, 200);
+});
+
+test('reset-password with a valid token marks an unverified address verified', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  await register(s);
+  await s.api('POST', '/api/forgot-password', { body: { email: 'newbie@example.com' } });
+  const r = await s.api('POST', '/api/reset-password', { body: { token: s.lastToken('reset'), password: 'fresh-password-1' } });
+  assert.equal(r.status, 200);
+  const login = await s.api('POST', '/api/login', { body: { login: 'newbie', password: 'fresh-password-1' } });
+  assert.equal(login.status, 200);
+});
+
+test('reset-password rejects huge passwords and malformed tokens', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  await registerAndVerify(s);
+  await s.api('POST', '/api/forgot-password', { body: { email: 'newbie@example.com' } });
+  const token = s.lastToken('reset');
+  const big = await s.api('POST', '/api/reset-password', { body: { token, password: 'p'.repeat(5000) } });
+  assert.equal(big.json.error, 'password_long');
+  for (const bad of [undefined, 7, { $ne: 1 }, 'nope']) {
+    const r = await s.api('POST', '/api/reset-password', { body: { token: bad, password: 'fresh-password-1' } });
+    assert.equal(r.status, 400);
+    assert.equal(r.json.error, 'token_invalid');
+  }
+  const ok = await s.api('POST', '/api/reset-password', { body: { token, password: 'fresh-password-1' } });
+  assert.equal(ok.status, 200, 'rejected attempts did not burn the token');
+});
+
+test('change-password needs the current password and keeps only the current session', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  const { cookie } = await registerAndVerify(s);
+  const second = await s.api('POST', '/api/login', { body: { login: 'newbie', password: 'longenough1' } });
+  const otherCookie = second.headers.get('set-cookie').split(';')[0];
+  assert.equal((await s.api('POST', '/api/change-password', { body: { current: 'longenough1', next: 'x' } })).status, 401);
+  const wrong = await s.api('POST', '/api/change-password', { cookie, body: { current: 'wrong-wrong', next: 'new-password-1' } });
+  assert.equal(wrong.status, 400);
+  assert.equal(wrong.json.error, 'current_password_wrong');
+  const short = await s.api('POST', '/api/change-password', { cookie, body: { current: 'longenough1', next: 'tiny' } });
+  assert.equal(short.json.error, 'password_short');
+  const huge = await s.api('POST', '/api/change-password', { cookie, body: { current: 'longenough1', next: 'p'.repeat(5000) } });
+  assert.equal(huge.json.error, 'password_long');
+  const ok = await s.api('POST', '/api/change-password', { cookie, body: { current: 'longenough1', next: 'new-password-1' } });
+  assert.equal(ok.status, 200);
+  assert.equal((await s.api('GET', '/api/me', { cookie })).json.user.login, 'newbie');
+  assert.equal((await s.api('GET', '/api/me', { cookie: otherCookie })).json.user, null);
+  assert.equal((await s.api('POST', '/api/login', { body: { login: 'newbie', password: 'longenough1' } })).status, 401);
+  assert.equal((await s.api('POST', '/api/login', { body: { login: 'newbie', password: 'new-password-1' } })).status, 200);
+});
+
+test('sessions: list marks the current one, single and bulk revoke work', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  const { cookie } = await registerAndVerify(s);
+  const other = await s.api('POST', '/api/login', {
+    body: { login: 'newbie', password: 'longenough1' },
+    headers: { 'user-agent': 'Phone/2' },
+  });
+  const otherCookie = other.headers.get('set-cookie').split(';')[0];
+  const list = await s.api('GET', '/api/sessions', { cookie });
+  assert.equal(list.status, 200);
+  assert.equal(list.json.sessions.length, 2);
+  const current = list.json.sessions.filter((x) => x.current);
+  assert.equal(current.length, 1);
+  const phone = list.json.sessions.find((x) => x.userAgent === 'Phone/2');
+  assert.match(phone.id, /^[0-9a-f]{16}$/);
+  assert.equal(phone.current, false);
+
+  const del = await s.api('DELETE', '/api/sessions/' + phone.id, { cookie });
+  assert.equal(del.status, 200);
+  assert.equal((await s.api('GET', '/api/me', { cookie: otherCookie })).json.user, null);
+  assert.equal((await s.api('DELETE', '/api/sessions/' + phone.id, { cookie })).status, 404);
+  assert.equal((await s.api('DELETE', '/api/sessions/not-an-id', { cookie })).status, 400);
+
+  const third = await s.api('POST', '/api/login', { body: { login: 'newbie', password: 'longenough1' } });
+  const thirdCookie = third.headers.get('set-cookie').split(';')[0];
+  const bulk = await s.api('POST', '/api/sessions/revoke-others', { cookie });
+  assert.equal(bulk.status, 200);
+  assert.equal((await s.api('GET', '/api/me', { cookie: thirdCookie })).json.user, null);
+  assert.equal((await s.api('GET', '/api/me', { cookie })).json.user.login, 'newbie');
+});
+
+test("a user cannot revoke another user's session", async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  const { cookie } = await registerAndVerify(s);
+  createUser(s.db, { login: 'victim', password: 'victim-pass-1', role: 'user', email: 'v@example.com' });
+  const v = await s.api('POST', '/api/login', { body: { login: 'victim', password: 'victim-pass-1' } });
+  const vCookie = v.headers.get('set-cookie').split(';')[0];
+  const vList = await s.api('GET', '/api/sessions', { cookie: vCookie });
+  const victimSessionId = vList.json.sessions[0].id;
+  const r = await s.api('DELETE', '/api/sessions/' + victimSessionId, { cookie });
+  assert.equal(r.status, 404);
+  assert.equal((await s.api('GET', '/api/me', { cookie: vCookie })).json.user.login, 'victim');
+});
+
+test('sessions endpoints require a login', async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.cleanup());
+  assert.equal((await s.api('GET', '/api/sessions')).status, 401);
+  assert.equal((await s.api('POST', '/api/sessions/revoke-others')).status, 401);
+  assert.equal((await s.api('POST', '/api/change-password', { body: {} })).status, 401);
 });

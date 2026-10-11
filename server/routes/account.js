@@ -1,10 +1,10 @@
 'use strict';
 
 const { HttpError, readJson } = require('../http-util');
-const { hashPassword, createSession, sessionCookie } = require('../auth');
+const { hashPassword, verifyPassword, createSession, sessionCookie, clearCookie, sha256 } = require('../auth');
 const { normalizeEmail, checkLogin, checkPassword } = require('../account-rules');
-const { issueToken, consumeToken } = require('../tokens');
-const { verifyEmailMessage } = require('../mail-templates');
+const { issueToken, peekToken, consumeToken } = require('../tokens');
+const { verifyEmailMessage, resetPasswordMessage } = require('../mail-templates');
 const { meBody } = require('../me');
 
 const GENERIC = { ok: true };
@@ -127,5 +127,128 @@ const routes = [
     },
   },
 ];
+
+function closeSessions(c, userId, exceptToken) {
+  if (exceptToken) {
+    c.db.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').run(userId, sha256(exceptToken));
+  } else {
+    c.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+  }
+}
+
+routes.push(
+  {
+    method: 'POST',
+    pattern: '/api/forgot-password',
+    handler: async (c) => {
+      requireMail(c);
+      const b = await readJson(c.req);
+      const email = normalizeEmail(b.email);
+      if (!email) throw new HttpError(400, 'email_invalid');
+      checkMailLimits(c, email);
+      const user = c.db.prepare('SELECT id, login, email FROM users WHERE lower(email) = ?').get(email);
+      if (user) {
+        const token = issueToken(c.db, user.id, 'reset_password', c.now());
+        queueMail(c, user.email, resetPasswordMessage({ login: user.login, url: `${c.publicUrl}/account#reset=${token}` }));
+      }
+      return { body: GENERIC };
+    },
+  },
+  {
+    method: 'POST',
+    pattern: '/api/reset-password',
+    handler: async (c) => {
+      const b = await readJson(c.req);
+      const password = str(b.password);
+      // Peek first: a rejected password must not burn the one-time token.
+      const userId = peekToken(c.db, b.token, 'reset_password', c.now());
+      if (userId === null) throw new HttpError(400, 'token_invalid');
+      const user = c.db.prepare('SELECT id, login FROM users WHERE id = ?').get(userId);
+      if (!user) throw new HttpError(400, 'token_invalid');
+      const passErr = checkPassword(password, user.login);
+      if (passErr) throw new HttpError(400, passErr);
+      if (consumeToken(c.db, b.token, 'reset_password', c.now()) === null) throw new HttpError(400, 'token_invalid');
+      c.db
+        .prepare(
+          `UPDATE users SET password_hash = ?, password_changed_at = datetime('now'),
+             email_verified_at = COALESCE(email_verified_at, datetime('now')) WHERE id = ?`,
+        )
+        .run(hashPassword(password), userId);
+      closeSessions(c, userId, null);
+      return { body: GENERIC };
+    },
+  },
+  {
+    method: 'POST',
+    pattern: '/api/change-password',
+    handler: async (c) => {
+      const user = requireUser(c);
+      const b = await readJson(c.req);
+      const next = str(b.next);
+      const passErr = checkPassword(next, user.login);
+      if (passErr) throw new HttpError(400, passErr);
+      // Same budget as login: a stolen session must not be able to brute-force the current password.
+      if (!c.limiters.loginAccount.allow('acct:' + user.login.toLowerCase(), c.now())) throw tooMany();
+      const row = c.db.prepare('SELECT password_hash FROM users WHERE id = ?').get(user.id);
+      if (!verifyPassword(str(b.current), row.password_hash)) throw new HttpError(400, 'current_password_wrong');
+      c.db
+        .prepare("UPDATE users SET password_hash = ?, password_changed_at = datetime('now') WHERE id = ?")
+        .run(hashPassword(next), user.id);
+      closeSessions(c, user.id, c.token);
+      return { body: GENERIC };
+    },
+  },
+  {
+    method: 'GET',
+    pattern: '/api/sessions',
+    handler: async (c) => {
+      const user = requireUser(c);
+      const currentHash = sha256(c.token);
+      const rows = c.db
+        .prepare(
+          `SELECT token_hash, created_at, last_seen_at, ip, user_agent FROM sessions
+           WHERE user_id = ? AND expires_at > ? ORDER BY last_seen_at DESC, created_at DESC`,
+        )
+        .all(user.id, c.now());
+      return {
+        body: {
+          sessions: rows.map((r) => ({
+            id: r.token_hash.slice(0, 16),
+            createdAt: r.created_at,
+            lastSeenAt: r.last_seen_at,
+            ip: r.ip,
+            userAgent: r.user_agent,
+            current: r.token_hash === currentHash,
+          })),
+        },
+      };
+    },
+  },
+  {
+    method: 'POST',
+    pattern: '/api/sessions/revoke-others',
+    handler: async (c) => {
+      const user = requireUser(c);
+      closeSessions(c, user.id, c.token);
+      return { body: GENERIC };
+    },
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/sessions/:id',
+    handler: async (c) => {
+      const user = requireUser(c);
+      if (!/^[0-9a-f]{16}$/.test(c.params.id)) throw new HttpError(400, 'bad session id');
+      const r = c.db
+        .prepare('DELETE FROM sessions WHERE user_id = ? AND substr(token_hash, 1, 16) = ?')
+        .run(user.id, c.params.id);
+      if (r.changes === 0) throw new HttpError(404, 'not found');
+      if (c.params.id === sha256(c.token).slice(0, 16)) {
+        c.headers['Set-Cookie'] = clearCookie({ secure: c.cookieSecure });
+      }
+      return { body: GENERIC };
+    },
+  },
+);
 
 module.exports = routes;
