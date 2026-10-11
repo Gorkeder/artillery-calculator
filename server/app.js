@@ -3,7 +3,7 @@
 const { HttpError, sendJson } = require('./http-util');
 const { parseCookies, getSessionUser, createRateLimiter } = require('./auth');
 
-const ROUTE_MODULES = [require('./routes/auth'), require('./routes/content')];
+const ROUTE_MODULES = [require('./routes/auth'), require('./routes/content'), require('./routes/images')];
 
 function compile(pattern) {
   const keys = [];
