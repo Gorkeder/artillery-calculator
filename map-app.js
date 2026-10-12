@@ -138,7 +138,7 @@
       var count = state.features.filter(function (f) { return f.category_id === c.id; }).length;
       var cb = h('input', {
         type: 'checkbox', checked: !state.hidden[c.id],
-        onchange: function () { state.hidden[c.id] = !cb.checked; syncVisibility(); },
+        onchange: function () { state.hidden[c.id] = !cb.checked; syncVisibility(); refreshMobToggle(); },
       });
       ul.appendChild(h('li', { 'data-id': c.id },
         cb,
@@ -147,6 +147,7 @@
         h('span', { class: 'cat-n' }, String(count))));
     });
     if (hooks.afterCategories) hooks.afterCategories();
+    refreshMobToggle();
   }
 
   function setupSearch() {
@@ -486,6 +487,8 @@
     $('mob-mod').setAttribute('data-n', n ? String(n) : '');
   }
 
+  var refreshMobToggle = function () {};
+
   function setupMobile() {
     if (!$('mob')) return; // stale cached map.html without the phone panels
     var side = $('side');
@@ -524,13 +527,26 @@
       if (collapsed) setFilters(false);
       $('mob-collapse').setAttribute('aria-label', collapsed ? 'Развернуть панель' : 'Свернуть панель');
     });
+    // One button toggles everything: all categories and the personal marks layer.
+    function marksBox() { return document.querySelector('#marks-slot input[type=checkbox]'); }
+    function anyVisible() {
+      var cb = marksBox();
+      return (cb && cb.checked) || state.categories.some(function (c) { return !state.hidden[c.id]; });
+    }
+    refreshMobToggle = function () { $('mob-marks').classList.toggle('off', !anyVisible()); };
     $('mob-marks').addEventListener('click', function () {
-      var cb = document.querySelector('#marks-slot input[type=checkbox]');
-      if (!cb) return;
-      cb.checked = !cb.checked;
-      cb.dispatchEvent(new Event('change'));
-      $('mob-marks').classList.toggle('off', !cb.checked);
+      var hide = anyVisible();
+      state.categories.forEach(function (c) { state.hidden[c.id] = hide; });
+      syncVisibility();
+      renderCategories();
+      var cb = marksBox();
+      if (cb && cb.checked === hide) {
+        cb.checked = !hide;
+        cb.dispatchEvent(new Event('change'));
+      }
+      refreshMobToggle();
     });
+    $('marks-slot').addEventListener('change', refreshMobToggle);
     $('mob-mod').addEventListener('click', openMobileModeration);
     // Tapping the map closes the filter dropdown.
     leaflet.on('click', function () { setFilters(false); });
