@@ -314,7 +314,7 @@
       elDesc.textContent = 'Следующая тестовая сессия ещё не анонсирована. Следите за обновлениями.';
       elCd.hidden = true;
       elLink.hidden = true;
-      return;
+      return null;
     }
 
     elTitle.textContent = next.title;
@@ -335,9 +335,12 @@
     } else {
       elLink.hidden = true;
     }
+    return next;
   }
 
-  function renderList(entries) {
+  // The highlighted next playtest is already shown above, so the list skips it.
+  function renderList(entries, skip) {
+    entries = entries.filter(function (e) { return e !== skip; });
     var ol = document.getElementById('pt-list');
     if (!entries.length) {
       ol.innerHTML = '<li class="pt-empty">Плейтестов пока нет.</li>';
@@ -538,8 +541,7 @@
 
   var now = new Date();
   var entries = normalize(PLAYTESTS, now);
-  renderNext(entries, now);
-  renderList(entries);
+  renderList(entries, renderNext(entries, now));
   initChips();
   initVideoFeed();
 })();
