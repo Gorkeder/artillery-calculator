@@ -13,7 +13,7 @@ There is no build step and no linter for the static site; tests exist for the `s
 `tools/` scripts: `node --test server/test/*.test.js tools/*.test.js`. Don't invent other commands
 for them.
 
-## Статус проекта (обновлено 2026-10-11)
+## Статус проекта (обновлено 2026-10-12)
 
 Этот раздел поддерживается вручную: после каждой заметной работы обновляй «Сделано» / «Не сделано».
 
@@ -50,6 +50,10 @@ for them.
   остаётся черновиком до кнопки «Отправить на модерацию»; при отправке пустые объекты, дубли (в пределах 0,3% карты
   от существующего объекта той же категории) и частая отправка (5 за 10 минут) уходят в отдельную вкладку модерации,
   которую можно отклонить целиком (`POST /api/moderation/reject-flagged`). Классификация — `server/proposals.js`.
+
+- **Редизайн главной в стиле stalzone.wiki** (2026-10-12): шапка «логотип + видео / аккаунт / бургер» вместо ряда
+  кнопок, выезжающее меню справа (ПК и телефон), на главной приветствие, чипы «Инструменты / Об игре / Сообщество»
+  и карточки разделов. Та же шапка на `/account` и `/privacy`. Боковая вкладка видео видна только при ширине >1700 px.
 
 - **Телефонный интерфейс карты** (≤720 px, в стиле stalzone.wiki): плавающие панели (название карты со сворачиванием,
   инструменты: поиск / «Мои метки» / модерация для админа, выпадающие «Фильтры»), зум справа с кнопкой «вся карта».
@@ -106,9 +110,12 @@ for them.
   All write permissions go through `server/permissions.js` `can()`; coordinates are stored as 0..1
   fractions of the map image.
 - `account.html`, `account.js`, `account.css` — user account page (served at `/account`: login, registration,
-  e-mail verification, password reset/change, session list). `account-nav.js` — header "Войти"/login link,
-  included only by `index.html`. `privacy.html` — privacy policy draft (served at `/privacy`).
-- `index.html` — landing page (hero, playtest calendar). Links to `styles.css`. The
+  e-mail verification, password reset/change, session list). `account-nav.js` — header "Войти"/login link
+  (text link, `[data-account-label]` inside it, or an icon link — then only title/indicator change). `privacy.html` — privacy policy draft (served at `/privacy`).
+- Общая шапка с бургер-меню (`index.html`, `account.html`, `privacy.html`): разметка `<header class="sh">` +
+  `<nav class="sm" id="site-menu">` скопирована в каждый HTML (сборки нет — правь во всех трёх), стили
+  `site-header.css`, логика `site-menu.js`. У `/art-calc` и `/map` свои панели инструментов, шапки там нет.
+- `index.html` — landing page (hero with section chips/tiles, playtest calendar). Links to `styles.css`. The
   playtest calendar is hardcoded as a `PLAYTESTS` array inline in a `<script>` at the
   bottom of the file — add new playtests by editing that array directly, no CMS/data file.
 - `art-calc.html` — the calculator itself. Fully self-contained (its own
