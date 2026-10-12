@@ -431,12 +431,131 @@
         : '/account?next=' + encodeURIComponent(location.pathname + location.search);
     });
     if (!user) {
-      $('marks-slot').appendChild(h('p', { class: 'hint' }, 'Войдите, чтобы ставить свои метки. ',
+      $('marks-slot').appendChild(h('p', { class: 'hint desk-only' }, 'Войдите, чтобы ставить свои метки. ',
         h('a', { href: '/account?next=' + encodeURIComponent(location.pathname + location.search) }, 'Войти')));
     }
     if (user && user.proposalsBlocked) {
-      $('side').appendChild(h('p', { class: 'hint' },
+      $('side').appendChild(h('p', { class: 'hint desk-only' },
         'Отправка предложений для вас закрыта' + (user.blockReason ? ': ' + user.blockReason : '') + '.'));
+    }
+  }
+
+  // ---------- phone interface ----------
+  // Floating panels over the map (title, tools, filters, zoom). Phones only view: no drawing or
+  // proposals; an admin still gets the moderation queue.
+
+  var MOB_ICONS = {
+    chevron: '<path d="m15 18-6-6 6-6"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+    marks: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+    mod: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/><path d="m9 12 2 2 4-4"/>',
+    filter: '<path d="M3 5h18l-7 8v6l-4-2v-4z"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
+    fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  };
+
+  function mobIcon(name) {
+    var wrap = document.createElement('span');
+    wrap.className = 'ico';
+    // static markup from MOB_ICONS above, never user input
+    wrap.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+      'stroke-linecap="round" stroke-linejoin="round">' + MOB_ICONS[name] + '</svg>';
+    return wrap;
+  }
+
+  // Moderation on a phone: only the queue dialog is loaded, with a minimal stand-in for the editor API.
+  function openMobileModeration() {
+    if (!window.MapEditor) {
+      window.MapEditor = {
+        status: function (text) { notice(text); },
+        save: function (fn) {
+          return fn().then(function (v) { return v; }, function (err) {
+            notice(err.status === 401 ? 'Сессия истекла — войдите снова' : 'Ошибка: ' + err.message);
+            return null;
+          });
+        },
+        setModerationCount: setModerationBadge,
+      };
+    }
+    var ready = window.MapEditorDialogs ? Promise.resolve() : loadScript('/map-editor-dialogs.js');
+    ready.then(function () { window.MapEditorDialogs.moderation(); },
+      function () { notice('Не удалось открыть модерацию.'); });
+  }
+
+  function setModerationBadge(n) {
+    $('mob-mod').setAttribute('data-n', n ? String(n) : '');
+  }
+
+  function setupMobile() {
+    var side = $('side');
+    var select = $('map-select');
+    var home = select.parentNode;
+    var filtersBtn = $('mob-filters');
+    $('mob-collapse').appendChild(mobIcon('chevron'));
+    $('mob-search').appendChild(mobIcon('search'));
+    $('mob-marks').appendChild(mobIcon('marks'));
+    $('mob-mod').appendChild(mobIcon('mod'));
+    filtersBtn.appendChild(mobIcon('filter'));
+    filtersBtn.appendChild(h('span', { class: 'grow' }, 'Фильтры'));
+    filtersBtn.appendChild(mobIcon('down'));
+
+    function setFilters(open) {
+      side.classList.toggle('open', open);
+      filtersBtn.setAttribute('aria-expanded', String(open));
+    }
+
+    // The map select lives in the header on desktop and in the floating title on a phone.
+    function placeSelect() {
+      if (narrow.matches) $('mob-title-slot').appendChild(select);
+      else home.insertBefore(select, $('ed-slot'));
+      if (!narrow.matches) setFilters(false);
+    }
+    placeSelect();
+    if (narrow.addEventListener) narrow.addEventListener('change', placeSelect);
+
+    filtersBtn.addEventListener('click', function () { setFilters(!side.classList.contains('open')); });
+    $('mob-search').addEventListener('click', function () {
+      setFilters(true);
+      $('search').focus();
+    });
+    $('mob-collapse').addEventListener('click', function () {
+      var collapsed = $('mob').classList.toggle('collapsed');
+      if (collapsed) setFilters(false);
+      $('mob-collapse').setAttribute('aria-label', collapsed ? 'Развернуть панель' : 'Свернуть панель');
+    });
+    $('mob-marks').addEventListener('click', function () {
+      var cb = document.querySelector('#marks-slot input[type=checkbox]');
+      if (!cb) return;
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event('change'));
+      $('mob-marks').classList.toggle('off', !cb.checked);
+    });
+    $('mob-mod').addEventListener('click', openMobileModeration);
+    // Tapping the map closes the filter dropdown.
+    leaflet.on('click', function () { setFilters(false); });
+
+    // «Fit to map» button inside the zoom control.
+    var zoom = document.querySelector('.leaflet-control-zoom');
+    if (zoom) {
+      var fit = h('a', { class: 'mob-fit', href: '#', role: 'button', title: 'Показать всю карту' });
+      fit.appendChild(mobIcon('fit'));
+      L.DomEvent.on(fit, 'click', function (e) {
+        L.DomEvent.preventDefault(e);
+        if (state.size) leaflet.fitBounds([[0, 0], [state.size.height, state.size.width]]);
+      });
+      zoom.appendChild(fit);
+    }
+  }
+
+  // Shows the phone-only buttons that depend on who is signed in.
+  function setupMobileUser() {
+    $('mob-marks').hidden = !state.me.can.marks;
+    var admin = !!state.me.can.feature;
+    $('mob-mod').hidden = !admin;
+    if (admin) {
+      api.get('/api/moderation').then(function (d) {
+        setModerationBadge(d.proposals.length + d.flagged.length + d.reports.length);
+      }, function () { /* the badge is a convenience */ });
     }
   }
 
@@ -459,7 +578,6 @@
   function init() {
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeCard(); });
     $('map-select').addEventListener('change', function (e) { loadMap(e.target.value); });
-    $('layers-btn').addEventListener('click', function () { $('side').classList.toggle('open'); });
     setupSearch();
 
     return api.get('/api/me')
@@ -471,7 +589,7 @@
           function () { geomanLoaded = true; },
           function () { /* editor unavailable; the viewer still works */ });
       })
-      .then(function () { createMap(); setupAuth(); return reloadMaps(); })
+      .then(function () { createMap(); setupAuth(); setupMobile(); setupMobileUser(); return reloadMaps(); })
       .then(function () {
         var q = new URLSearchParams(location.search);
         var wanted = q.get('m');
