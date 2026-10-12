@@ -21,6 +21,7 @@
     mode: 'shared',
     wantedMark: null,
     drawTool: false,
+    revealed: {},
   };
   var hooks = { onLayer: null, afterCategories: null, afterLoad: null };
   var listeners = { mapLoaded: [] };
@@ -91,7 +92,15 @@
     return true;
   }
 
+  // The admin gets everything from the API, but rejected and auto-flagged (spam) proposals stay off
+  // the map; the moderation queue can still reveal one via «Показать».
+  function offMap(feature) {
+    return !!state.me.can.feature && feature.status === 'pending' && !state.revealed[feature.id] &&
+      !!(feature.reject_reason || feature.flag);
+  }
+
   function addFeatureLayer(feature) {
+    if (offMap(feature)) return;
     var layer = makeLayer(feature);
     if (!layer) return;
     if (hooks.onLayer) hooks.onLayer(layer, feature);
@@ -135,7 +144,7 @@
     var ul = $('cats');
     ul.textContent = '';
     state.categories.forEach(function (c) {
-      var count = state.features.filter(function (f) { return f.category_id === c.id; }).length;
+      var count = state.features.filter(function (f) { return f.category_id === c.id && !offMap(f); }).length;
       var cb = h('input', {
         type: 'checkbox', checked: !state.hidden[c.id],
         onchange: function () { state.hidden[c.id] = !cb.checked; syncVisibility(); refreshMobToggle(); },
@@ -284,6 +293,11 @@
 
   function focusFeature(id) {
     var f = featureById(id);
+    if (f && offMap(f)) {
+      state.revealed[id] = true;
+      addFeatureLayer(f);
+      renderCategories();
+    }
     var layer = state.layers[id];
     if (!f || !layer) return;
     if (state.hidden[f.category_id]) {
@@ -349,6 +363,7 @@
       state.categories = data.categories;
       state.features = data.features;
       state.hidden = {};
+      state.revealed = {};
       data.categories.forEach(function (c) { if (!c.visible_default) state.hidden[c.id] = true; });
       closeCard(true);
       if (overlay) { overlay.remove(); overlay = null; }
