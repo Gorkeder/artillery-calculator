@@ -379,7 +379,7 @@
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
       var s = document.createElement('script');
-      s.src = src;
+      s.src = src + '?v=' + (window.MAP_V || '');
       s.onload = resolve;
       s.onerror = function () { reject(new Error('failed to load ' + src)); };
       document.head.appendChild(s);
@@ -487,6 +487,7 @@
   }
 
   function setupMobile() {
+    if (!$('mob')) return; // stale cached map.html without the phone panels
     var side = $('side');
     var select = $('map-select');
     var home = select.parentNode;
@@ -549,6 +550,7 @@
 
   // Shows the phone-only buttons that depend on who is signed in.
   function setupMobileUser() {
+    if (!$('mob')) return;
     $('mob-marks').hidden = !state.me.can.marks;
     var admin = !!state.me.can.feature;
     $('mob-mod').hidden = !admin;
