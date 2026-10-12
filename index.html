@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ANOMA WIKI</title>
 <link rel="icon" href="/favicon.jpg" type="image/jpeg">
+<link rel="stylesheet" href="/site-header.css">
 <link rel="stylesheet" href="/styles.css">
 <!-- Yandex.Metrika counter -->
 <script type="text/javascript">
@@ -21,23 +22,37 @@
 <!-- /Yandex.Metrika counter -->
 </head>
 <body>
-<header class="site-header">
-  <a class="brand" href="#home">
-    <img src="/logo.png" alt="ANOMA">
-    <span class="wiki">WIKI</span>
-  </a>
-  <nav class="site-nav">
-    <a href="#home">Главная</a>
-    <a href="#playtests">Календарь плейтестов</a>
-    <a href="/map">Карта</a>
-    <a href="/account" data-account-link>Войти</a>
-    <a class="cta" href="/art-calc">Калькулятор &rarr;</a>
-    <button type="button" class="video-feed-nav-btn" id="video-feed-nav-btn"
-      aria-expanded="false" aria-controls="video-feed-panel" aria-label="Видео ютуберов">
-      <span aria-hidden="true">&#9654;</span>
-    </button>
-  </nav>
+<header class="sh">
+  <a class="sh-brand" href="/"><img src="/logo.png" alt="ANOMA"><span>WIKI</span></a>
+  <button type="button" class="sh-icon" id="video-feed-nav-btn" aria-expanded="false"
+    aria-controls="video-feed-panel" aria-label="Видео ютуберов" title="Видео ютуберов"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z"/></svg></button>
+  <a class="sh-icon" href="/account" data-account-link aria-label="Войти" title="Войти"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></a>
+  <button type="button" class="sh-icon" id="site-menu-toggle" aria-expanded="false"
+    aria-controls="site-menu" aria-label="Меню"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
 </header>
+<div class="sm-overlay" id="site-menu-overlay" hidden></div>
+<nav class="sm" id="site-menu" aria-label="Меню сайта">
+  <div class="sm-head">
+    <span>Меню</span>
+    <button type="button" class="sh-icon" id="site-menu-close" aria-label="Закрыть меню"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="sm-body">
+    <ul class="sm-list">
+      <li><a class="sm-item" href="/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Главная</span></a></li>
+      <li><a class="sm-item" href="/map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg><span>Интерактивная карта</span></a></li>
+      <li><a class="sm-item" href="/art-calc"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h.01M12 19h.01M16 19h.01"/></svg><span>Калькулятор артиллерии</span></a></li>
+      <li><a class="sm-item" href="/#playtests"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>Календарь плейтестов</span></a></li>
+      <li><button type="button" class="sm-item" id="video-feed-menu-item"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z"/></svg><span>Видео ютуберов</span></button></li>
+    </ul>
+    <div class="sm-sep"></div>
+    <ul class="sm-list">
+      <li><a class="sm-item" href="/account" data-account-link><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span data-account-label>Войти</span></a></li>
+      <li><a class="sm-item" href="https://anoma.su" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Официальный сайт</span><span class="sm-ext">&nearr;</span></a></li>
+      <li><a class="sm-item" href="/privacy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg><span>Политика данных</span></a></li>
+    </ul>
+  </div>
+  <div class="sm-foot">Фанатский проект, не официальный сайт ANOMA.<br>Автор — <a href="https://t.me/Gorkeder" target="_blank" rel="noopener">@Gorkeder</a></div>
+</nav>
 
 <button type="button" class="video-feed-tab" id="video-feed-tab"
   aria-expanded="false" aria-controls="video-feed-panel" aria-label="Видео ютуберов" hidden>
@@ -69,14 +84,70 @@
 
 <main>
   <section id="home" class="hero">
-    <h1>ANOMA <span class="wiki">WIKI</span></h1>
+    <h1>Добро пожаловать на <span class="wiki">ANOMA&nbsp;WIKI</span></h1>
     <p class="lede">
-      ANOMA WIKI — вики с калькуляторами по MMORPG в сеттинге STALKER с элементами
-      выживания, сочетающей open-world PvP/PvE-контент и extraction-геймплей.
+      Фанатская вики по MMORPG ANOMA в сеттинге STALKER: интерактивная карта, калькулятор
+      артиллерии, календарь плейтестов и видео — всё в одном месте.
     </p>
-    <p class="lede-sub">
-      Подробнее об игре — <a href="https://anoma.su/faq" target="_blank" rel="noopener">официальный FAQ&nbsp;&rarr;</a>
-    </p>
+
+    <div class="chips" role="tablist" aria-label="Разделы">
+      <button type="button" class="chip is-active" role="tab" aria-selected="true" data-group="tools">Инструменты</button>
+      <button type="button" class="chip" role="tab" aria-selected="false" data-group="game">Об игре</button>
+      <button type="button" class="chip" role="tab" aria-selected="false" data-group="community">Сообщество</button>
+    </div>
+
+    <div class="tiles" id="tiles">
+      <a class="tile is-featured" href="/map" data-group="tools">
+        <span class="tile-head">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg>
+          <span class="tile-title">Интерактивная карта</span>
+          <span class="tile-badge">NEW</span>
+        </span>
+        <span class="tile-desc">Точки интереса, зоны и маршруты с поиском и фильтрами. Ставьте личные метки и предлагайте новые объекты.</span>
+      </a>
+      <a class="tile" href="/art-calc" data-group="tools">
+        <span class="tile-head">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h.01M12 19h.01M16 19h.01"/></svg>
+          <span class="tile-title">Калькулятор артиллерии</span>
+        </span>
+        <span class="tile-desc">Поставьте орудие и цель на карте — получите дальность и угол. Несколько орудий и целей, ссылка на расстановку.</span>
+      </a>
+      <a class="tile" href="#playtests" data-group="game" hidden>
+        <span class="tile-head">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+          <span class="tile-title">Календарь плейтестов</span>
+        </span>
+        <span class="tile-desc">Прошедшие и ближайшие тесты: даты, время по МСК, что проверяли и ссылки на объявления.</span>
+      </a>
+      <a class="tile" href="https://anoma.su/faq" target="_blank" rel="noopener" data-group="game" hidden>
+        <span class="tile-head">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17h.01"/></svg>
+          <span class="tile-title">Официальный FAQ</span>
+          <span class="tile-ext" aria-hidden="true">&nearr;</span>
+        </span>
+        <span class="tile-desc">Что за игра, издания и ответы разработчиков — на официальном сайте anoma.su.</span>
+      </a>
+      <button type="button" class="tile" id="video-feed-tile" data-group="community" hidden>
+        <span class="tile-head">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z"/></svg>
+          <span class="tile-title">Видео ютуберов</span>
+        </span>
+        <span class="tile-desc">Свежие и популярные ролики об ANOMA от авторов сообщества.</span>
+        <span class="tile-desc tile-featured" id="video-feed-tile-featured" hidden></span>
+      </button>
+      <a class="tile" href="https://t.me/Gorkeder" target="_blank" rel="noopener" data-group="community" hidden>
+        <span class="tile-head">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 4L3 11l6 2 2 6 3-4 5 4z"/><path d="M9 13l12-9"/></svg>
+          <span class="tile-title">Связаться с автором</span>
+          <span class="tile-ext" aria-hidden="true">&nearr;</span>
+        </span>
+        <span class="tile-desc">Нашли ошибку или есть идея для вики? Пишите в Telegram @Gorkeder.</span>
+      </a>
+    </div>
+  </section>
+
+  <section id="playtests">
+    <h2>Календарь плейтестов</h2>
 
     <div class="next-playtest" id="next-playtest">
       <div class="np-label">Ближайший плейтест</div>
@@ -87,11 +158,6 @@
       <a class="np-link" id="np-link" target="_blank" rel="noopener" hidden></a>
     </div>
 
-    <a class="cta-big" href="/art-calc">Калькулятор артиллерии &rarr;</a>
-  </section>
-
-  <section id="playtests">
-    <h2>Календарь плейтестов</h2>
     <ol class="pt-list" id="pt-list"></ol>
     <p class="pt-note">Информация обновляется по мере появления новых данных.</p>
   </section>
@@ -352,6 +418,9 @@
     document.getElementById('video-feed-tab-title').textContent = featured.title;
     document.getElementById('video-feed-tab-channel').textContent = featured.channel;
     tab.hidden = false;
+    var tileFeatured = document.getElementById('video-feed-tile-featured');
+    tileFeatured.textContent = 'Популярное: ' + featured.title;
+    tileFeatured.hidden = false;
   }
 
   function triggerVideoWave() {
@@ -397,6 +466,9 @@
   function hideVideoFeedTriggers() {
     document.getElementById('video-feed-tab').hidden = true;
     document.getElementById('video-feed-nav-btn').hidden = true;
+    document.getElementById('video-feed-menu-item').hidden = true;
+    document.getElementById('video-feed-tile').classList.add('is-unavailable');
+    initChips();
   }
 
   function initVideoFeed() {
@@ -407,6 +479,8 @@
 
     tab.addEventListener('click', openVideoFeed);
     navBtn.addEventListener('click', openVideoFeed);
+    document.getElementById('video-feed-menu-item').addEventListener('click', openVideoFeed);
+    document.getElementById('video-feed-tile').addEventListener('click', openVideoFeed);
     closeBtn.addEventListener('click', closeVideoFeed);
     overlay.addEventListener('click', closeVideoFeed);
     document.addEventListener('keydown', function (e) {
@@ -437,13 +511,40 @@
       });
   }
 
+  // Чипы над карточками разделов: показывают одну группу карточек.
+  // Недоступные карточки (.is-unavailable, напр. видео без videos.json) не показываются.
+  function initChips() {
+    var chips = document.querySelectorAll('.chip');
+    var tiles = document.querySelectorAll('#tiles .tile');
+    function select(group) {
+      Array.prototype.forEach.call(chips, function (c) {
+        var on = c.getAttribute('data-group') === group;
+        c.classList.toggle('is-active', on);
+        c.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      Array.prototype.forEach.call(tiles, function (t) {
+        t.hidden = t.getAttribute('data-group') !== group || t.classList.contains('is-unavailable');
+      });
+    }
+    Array.prototype.forEach.call(chips, function (c) {
+      if (!c._chipBound) {
+        c._chipBound = true;
+        c.addEventListener('click', function () { select(c.getAttribute('data-group')); });
+      }
+    });
+    var active = document.querySelector('.chip.is-active');
+    select(active ? active.getAttribute('data-group') : 'tools');
+  }
+
   var now = new Date();
   var entries = normalize(PLAYTESTS, now);
   renderNext(entries, now);
   renderList(entries);
+  initChips();
   initVideoFeed();
 })();
 </script>
+<script src="/site-menu.js"></script>
 <script src="/account-nav.js" defer></script>
 </body>
 </html>
