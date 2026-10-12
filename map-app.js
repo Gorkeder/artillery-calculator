@@ -438,14 +438,12 @@
   function setupAuth() {
     var btn = $('auth-btn');
     var user = state.me.user;
+    var label = user ? 'Аккаунт: ' + user.login : 'Войти';
     btn.hidden = false;
-    btn.textContent = user ? user.login : 'Войти';
-    btn.title = user ? 'Аккаунт' : 'Вход и регистрация';
-    btn.addEventListener('click', function () {
-      location.href = user
-        ? '/account'
-        : '/account?next=' + encodeURIComponent(location.pathname + location.search);
-    });
+    btn.href = user ? '/account' : '/account?next=' + encodeURIComponent(location.pathname + location.search);
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.classList.toggle('is-signed-in', !!user);
     if (!user) {
       $('marks-slot').appendChild(h('p', { class: 'hint desk-only' }, 'Войдите, чтобы ставить свои метки. ',
         h('a', { href: '/account?next=' + encodeURIComponent(location.pathname + location.search) }, 'Войти')));

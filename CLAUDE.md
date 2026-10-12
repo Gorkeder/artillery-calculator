@@ -53,7 +53,8 @@ for them.
 
 - **Редизайн главной в стиле stalzone.wiki** (2026-10-12): шапка «логотип + видео / аккаунт / бургер» вместо ряда
   кнопок, выезжающее меню справа (ПК и телефон), на главной приветствие, чипы «Инструменты / Об игре / Сообщество»
-  и карточки разделов. Та же шапка на `/account` и `/privacy`. Боковая вкладка видео видна только при ширине >1700 px.
+  и карточки разделов. Та же шапка на `/account`, `/privacy`, `/art-calc` и `/map` (у карты и калькулятора под шапкой
+  своя полоса инструментов). Единая палитра (`#0a0a09` / `#141412` / `#2c2b25`). Боковая вкладка видео видна только при ширине >1700 px.
 
 - **Телефонный интерфейс карты** (≤720 px, в стиле stalzone.wiki): плавающие панели (название карты со сворачиванием,
   инструменты: поиск / «Мои метки» / модерация для админа, выпадающие «Фильтры»), зум справа с кнопкой «вся карта».
@@ -112,9 +113,10 @@ for them.
 - `account.html`, `account.js`, `account.css` — user account page (served at `/account`: login, registration,
   e-mail verification, password reset/change, session list). `account-nav.js` — header "Войти"/login link
   (text link, `[data-account-label]` inside it, or an icon link — then only title/indicator change). `privacy.html` — privacy policy draft (served at `/privacy`).
-- Общая шапка с бургер-меню (`index.html`, `account.html`, `privacy.html`): разметка `<header class="sh">` +
-  `<nav class="sm" id="site-menu">` скопирована в каждый HTML (сборки нет — правь во всех трёх), стили
-  `site-header.css`, логика `site-menu.js`. У `/art-calc` и `/map` свои панели инструментов, шапки там нет.
+- Общая шапка с бургер-меню (`index.html`, `account.html`, `privacy.html`, `art-calc.html`, `map.html`): разметка
+  `<header class="sh">` + `<nav class="sm" id="site-menu">` скопирована в каждый HTML (сборки нет — правь во всех пяти),
+  стили `site-header.css`, логика `site-menu.js`. На `/map` иконку аккаунта (`#auth-btn`) обновляет `map-app.js`, а не
+  `account-nav.js`; полоса инструментов карты — `.mbar` (на телефоне скрыта). Версия `?v=` в `map.html` — меняй при правках.
 - `index.html` — landing page (hero with section chips/tiles, playtest calendar). Links to `styles.css`. The
   playtest calendar is hardcoded as a `PLAYTESTS` array inline in a `<script>` at the
   bottom of the file — add new playtests by editing that array directly, no CMS/data file.
