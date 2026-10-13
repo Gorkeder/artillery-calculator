@@ -12,6 +12,7 @@ const ROUTE_MODULES = [
   require('./routes/marks'),
   require('./routes/moderation'),
   require('./routes/clans'),
+  require('./routes/clan-roles'),
 ];
 
 function compile(pattern) {
