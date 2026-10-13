@@ -497,7 +497,7 @@ SPF-записей станет две и проверка сломается.
 **Что выкатывается:** миграция 6 (таблицы кланов, `users.clans_blocked`) применяется сама при старте `anoma-api`.
 Новые страницы `clan.html`, `clan.css`, `clan*.js` уходят обычным rsync.
 
-**nginx (руками, один раз) — ДО мерджа и пуша в `master`:** добавить в HTTPS `server { }` блоки из
+**nginx (руками, один раз; на проде сделано 2026-10-13, повторно не нужно) — ДО мерджа и пуша в `master`:** добавить в HTTPS `server { }` блоки из
 `server/deploy/nginx-map.conf` (`/clan`, `/clans`, `/clans/`, `/clan/join/`), затем
 `sudo nginx -t && sudo systemctl reload nginx`. На главной появляется ссылка «Кланы» на `/clans`, и без этих
 блоков она отдаёт 404 (API при этом работает), поэтому сначала nginx, потом пуш.
@@ -534,7 +534,8 @@ SPF-записей станет две и проверка сломается.
 
 **Проверка после выката:**
 - гость: `curl -i -H 'X-Requested-With: x' https://anoma-wiki.ru/api/plans/xxxxxxxxxxxx` -> `401`;
-- nginx не должен добавлять `Cache-Control` к `/api/` (иначе `ETag`/`304` ломаются): в ответе API его быть не должно;
+- nginx не должен добавлять свой `Cache-Control` и менять `ETag` у `/api/`; сам API отдаёт `Cache-Control: no-store`
+  (в том числе в `304`), это `ETag`/`304` не ломает;
 - `304`: `curl -i -H 'If-None-Match: "v1"' -b 'sid=...' https://anoma-wiki.ru/api/plans/<id>` -> `HTTP/1.1 304`
   (подставьте реальные `<id>` плана и текущую версию из `ETag`; `sid` берётся из cookie сессии участника клана).
 

@@ -60,7 +60,7 @@ for them.
 - **Тактика кланов (этап 2)** (ветка `clans-tactics-stage2`, миграция 7): на `/map` режим «Тактика» для участников
   клана: планы (до 25, один активный), панель плана, рисунки карандашом в цвете отряда и ластик (ПК), фильтр по отрядам,
   опрос активного плана раз в 15 с с `ETag`/`304`; на телефоне только просмотр; исключённый участник выходит из режима.
-  Сервер — `server/tactic-validate.js`, `tactic-repo.js`, `routes/tactics.js` (8 маршрутов); клиент — `map-tactics.js`,
+  Сервер — `server/tactic-validate.js`, `tactic-repo.js`, `routes/tactics.js` (10 маршрутов); клиент — `map-tactics.js`,
   `map-tactics-editor.js`; упрощение штриха — `map-geo.js`. Спек — `2026-10-13-clans-tactics-design.md`,
   эксплуатация — `RELEASE.md` → «Тактика кланов (этап 2)».
 
