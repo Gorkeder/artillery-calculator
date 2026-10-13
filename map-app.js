@@ -22,6 +22,10 @@
     wantedMark: null,
     drawTool: false,
     revealed: {},
+    clan: null,
+    prevMode: 'shared',
+    ready: false,
+    wantTactics: false,
   };
   var hooks = { onLayer: null, afterCategories: null, afterLoad: null };
   var listeners = { mapLoaded: [] };
@@ -136,6 +140,8 @@
     state.categories.forEach(function (c) { state.groups[c.id] = L.layerGroup(); });
     state.features.forEach(addFeatureLayer);
     syncVisibility();
+    // Tactics mode shows only the plan: a map change must not bring the category layers back.
+    if (state.mode === 'tactics') Object.keys(state.groups).forEach(function (k) { state.groups[k].remove(); });
   }
 
   // ---------- category list / search ----------
@@ -251,6 +257,11 @@
   function updateUrl() {
     var q = new URLSearchParams();
     if (state.map) q.set('m', state.map.slug);
+    if (state.mode === 'tactics') {
+      q.set('tactics', '1');
+      var pid = window.MapTactics && window.MapTactics.planPublicId();
+      if (pid) q.set('plan', pid);
+    }
     if (state.openId !== null && state.openId !== undefined) q.set('f', String(state.openId));
     if (state.openMark !== null) q.set('mark', String(state.openMark));
     var s = q.toString();
@@ -435,6 +446,51 @@
       });
   }
 
+  // ---------- tactics mode ----------
+
+  var tacticsReady = null;
+
+  function loadTactics() {
+    if (!tacticsReady) tacticsReady = loadScript('/map-tactics.js');
+    return tacticsReady;
+  }
+
+  function enterTactics() {
+    if (!state.clan || state.mode === 'tactics') return;
+    state.prevMode = state.mode;
+    state.mode = 'tactics';
+    closeCard(true);
+    Object.keys(state.groups).forEach(function (k) { state.groups[k].remove(); });
+    // The shared and personal editors stop drawing; the personal marks layer is hidden for the mode.
+    if (window.MapEditor) window.MapEditor.setActive(false);
+    if (window.MapMarksEditor) window.MapMarksEditor.pause();
+    if (window.MapMarks) window.MapMarks.setSuspended(true);
+    state.drawTool = false;
+    loadTactics().then(function () {
+      var q = new URLSearchParams(location.search);
+      return window.MapTactics.start(window.MapViewer, state.clan, { plan: q.get('plan') });
+    }).then(function () {
+      if ($('mob-tactics')) $('mob-tactics').classList.add('on');
+      if (window.matchMedia('(min-width: 900px)').matches && window.MapTactics.canDraw()) {
+        return loadScript('/map-tactics-editor.js').then(function () { window.MapTacticsEditor.start(window.MapViewer, window.MapTactics); });
+      }
+      return null;
+    }).catch(function () { notice('Не удалось открыть тактику.'); leaveTactics(); });
+  }
+
+  function leaveTactics() {
+    if (state.mode !== 'tactics') return;
+    state.mode = state.prevMode || 'shared';
+    if (window.MapTactics) window.MapTactics.stop();
+    if (window.MapTacticsEditor) window.MapTacticsEditor.stop();
+    if ($('mob-tactics')) $('mob-tactics').classList.remove('on');
+    if (window.MapMarks) window.MapMarks.setSuspended(false);
+    // Hand the toolbars back: the admin returns to the editor mode they left, others to their marks.
+    if (window.MapEditor && state.mode === 'shared') window.MapEditor.setActive(true);
+    syncVisibility();
+    updateUrl();
+  }
+
   function setupAuth() {
     var btn = $('auth-btn');
     var user = state.me.user;
@@ -465,6 +521,7 @@
     filter: '<path d="M3 5h18l-7 8v6l-4-2v-4z"/>',
     down: '<path d="m6 9 6 6 6-6"/>',
     fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+    tactics: '<path d="M4 20 10 8l4 6 6-10"/><circle cx="4" cy="20" r="1.2"/><circle cx="20" cy="4" r="1.2"/>',
   };
 
   function mobIcon(name) {
@@ -508,6 +565,7 @@
     $('mob-search').appendChild(mobIcon('search'));
     $('mob-marks').appendChild(mobIcon('marks'));
     $('mob-mod').appendChild(mobIcon('mod'));
+    if ($('mob-tactics')) $('mob-tactics').appendChild(mobIcon('tactics'));
     filtersBtn.appendChild(mobIcon('filter'));
     filtersBtn.appendChild(h('span', { class: 'grow' }, 'Фильтры'));
     filtersBtn.appendChild(mobIcon('down'));
@@ -574,6 +632,20 @@
         setModerationBadge(d.proposals.length + d.flagged.length + d.reports.length);
       }, function () { /* the badge is a convenience */ });
     }
+    // Clan tactics: the button shows for a member with tactics_view (the site admin has no clan here).
+    var tacBtn = $('mob-tactics');
+    if (tacBtn && state.me.user && state.me.user.clan) {
+      api.get('/api/my/clan').then(function (body) {
+        if (!body.clan) return;
+        state.clan = body;
+        var can = body.me.isOwner || body.me.perms.indexOf('tactics_view') >= 0;
+        tacBtn.hidden = !can;
+        if (can && new URLSearchParams(location.search).get('tactics') === '1') {
+          // A deep link is opened once the map and the editors are up (end of init), not before.
+          if (state.ready) enterTactics(); else state.wantTactics = true;
+        }
+      }, function () { /* the button simply stays hidden */ });
+    }
   }
 
   // ---------- init ----------
@@ -595,6 +667,10 @@
   function init() {
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeCard(); });
     $('map-select').addEventListener('change', function (e) { loadMap(e.target.value); });
+    if ($('mob-tactics')) {
+      $('mob-tactics').addEventListener('click', function () { if (state.mode === 'tactics') leaveTactics(); else enterTactics(); });
+    }
+    document.body.addEventListener('tactics:closed', leaveTactics);
     setupSearch();
 
     return api.get('/api/me')
@@ -631,6 +707,10 @@
       .then(function () {
         if (!state.me.can.marks) return null;
         return startMarks().catch(function () { notice('Не удалось загрузить личные метки.'); });
+      })
+      .then(function () {
+        state.ready = true;
+        if (state.wantTactics) { state.wantTactics = false; enterTactics(); }
       });
   }
 

@@ -10,6 +10,7 @@
   var layers = {};
   var group = null;
   var visible = true;
+  var suspended = false;
   var clickHandler = null;
   var hooks = { onLayer: null };
   var els = {};
@@ -64,7 +65,7 @@
 
   function syncVisibility() {
     if (!group) return;
-    if (visible) group.addTo(V.leaflet()); else group.remove();
+    if (visible && !suspended) group.addTo(V.leaflet()); else group.remove();
     els.checkbox.checked = visible;
   }
 
@@ -192,6 +193,8 @@
     available: function () { var m = V.state().map; return !!(m && m.published); },
     open: open,
     focus: focus,
+    // Tactics mode hides the layer without touching the user's checkbox.
+    setSuspended: function (on) { suspended = !!on; syncVisibility(); },
     show: show,
   };
 })();
