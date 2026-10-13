@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex">
+<meta name="referrer" content="origin">
 <title>Кланы — ANOMA WIKI</title>
 <link rel="icon" href="/favicon.jpg" type="image/jpeg">
 <!-- Yandex.Metrika counter (webvisor off: invite links live in this page) -->
@@ -15,7 +16,7 @@
         k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
     })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=112397124', 'ym');
 
-    ym(112397124, 'init', {ssr:true, webvisor:false, clickmap:false, referrer: document.referrer, url: location.origin + location.pathname.replace(/^\/clan\/join\/.*/, '/clan/join/'), accurateTrackBounce:true});
+    ym(112397124, 'init', {ssr:true, webvisor:false, clickmap:false, referrer: document.referrer.replace(/\/clan\/join\/[^?#]*/, '/clan/join/').replace(/[?#].*$/, ''),url: location.origin + location.pathname.replace(/^\/clan\/join\/.*/, '/clan/join/'), accurateTrackBounce:true});
 </script>
 <noscript><div><img src="https://mc.yandex.ru/watch/112397124" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
 <!-- /Yandex.Metrika counter -->
