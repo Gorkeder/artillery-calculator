@@ -57,6 +57,13 @@ for them.
   Сервер — `server/clan-*.js`, `server/routes/clan*.js`. Спек — `docs/superpowers/specs/2026-10-13-clans-tactics-design.md`,
   план — `docs/superpowers/plans/2026-10-13-clans.md`.
 
+- **Тактика кланов (этап 2)** (ветка `clans-tactics-stage2`, миграция 7): на `/map` режим «Тактика» для участников
+  клана: планы (до 25, один активный), панель плана, рисунки карандашом в цвете отряда и ластик (ПК), фильтр по отрядам,
+  опрос активного плана раз в 15 с с `ETag`/`304`; на телефоне только просмотр; исключённый участник выходит из режима.
+  Сервер — `server/tactic-validate.js`, `tactic-repo.js`, `routes/tactics.js` (8 маршрутов); клиент — `map-tactics.js`,
+  `map-tactics-editor.js`; упрощение штриха — `map-geo.js`. Спек — `2026-10-13-clans-tactics-design.md`,
+  эксплуатация — `RELEASE.md` → «Тактика кланов (этап 2)».
+
 - **Редизайн главной в стиле stalzone.wiki** (2026-10-12): шапка «логотип + видео / аккаунт / бургер» вместо ряда
   кнопок, выезжающее меню справа (ПК и телефон), на главной приветствие, чипы «Инструменты / Об игре / Сообщество»
   и карточки разделов. Та же шапка на `/account`, `/privacy`, `/art-calc` и `/map` (у карты и калькулятора под шапкой
@@ -68,9 +75,12 @@ for them.
   Редактирование и предложения на телефоне не грузятся; у админа остаётся «Модерация» (`map-app.js` → `setupMobile`).
 
 ### Не сделано / ждёт решения
-- Кланы: этап 2 (тактика: планы, опрос, карандаш, ластик) и этап 3 (стрелка, зона, метка, текст; админский
-  просмотр кланов) — отдельные планы по спеку `2026-10-13-clans-tactics-design.md`. На проде добавить nginx-блоки
-  `/clan*` (см. `RELEASE.md` → «Кланы»). Перед анонсом пройти `/clan` на 375 px и показать абзац «Кланы» в `/privacy`.
+- Кланы: этап 3 (стрелка, зона, метка, текст; админский интерфейс просмотра кланов) — отдельный план по спеку
+  `2026-10-13-clans-tactics-design.md`. Перед анонсом пройти `/clan` на 375 px и показать абзац «Кланы» в `/privacy`.
+- Тактика (этап 2): фронтенд (Tasks 7-8) ещё не проверялся в живом браузере. Перед анонсом руками пройти: панель плана
+  (создать, переименовать, сделать активным, очистить, удалить); опрос раз в 15 с и `304` во вкладке Network; карандаш и
+  ластик (права по ролям, «рисует для: выбранные отряды»); фильтр по отрядам; телефон 375 px (только просмотр);
+  исключённый участник — режим закрывается. Показать абзац про тактику в `/privacy`.
 - Ветки `map-editor-spec` и `user-accounts` уже влиты в `master` (`git branch --merged`); влить ветку
   `docs/postfix-mail` (merge локально или PR).
 - Следить за репутацией почты (Gmail, Mail.ru, Яндекс): пометки «Не спам», DMARC-отчёты на адрес из `rua`,
@@ -131,6 +141,9 @@ for them.
   served at `/clan`, `/clans`, `/clans/<TAG>`, `/clan/join/<token>` (one HTML file, routing by pathname).
   Server: `server/clan-permissions.js` (role flags + hierarchy, pure), `clan-validate.js`, `clan-repo.js`,
   `clan-http.js`, routes `routes/clans.js`, `routes/clan-roles.js`, `routes/clan-invites.js`.
+- `map-tactics.js` (режим «Тактика» на `/map`: просмотр, опрос раз в 15 с, панель плана, фильтр по отрядам) и
+  `map-tactics-editor.js` (карандаш и ластик, только ПК); сервер — `server/tactic-validate.js`, `tactic-repo.js`,
+  `routes/tactics.js` (планы и рисунки, `ETag`/`304`), таблицы `tactic_plans`, `tactic_items` (миграция 7).
 - `index.html` — landing page (hero with section chips/tiles, playtest calendar). Links to `styles.css`. The
   playtest calendar is hardcoded as a `PLAYTESTS` array inline in a `<script>` at the
   bottom of the file — add new playtests by editing that array directly, no CMS/data file.
