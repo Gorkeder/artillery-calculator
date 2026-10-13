@@ -22,7 +22,9 @@
   var lastPlan = null;
 
   function hasPlan() { return !!T.planPublicId(); }
-  function usable() { return running && V.mode() === 'tactics' && T.active() && hasPlan() && allowedSquads().length > 0; }
+  function usable() {
+    return running && V.mode() === 'tactics' && T.active() && hasPlan() && (ed.eraserOnly || allowedSquads().length > 0);
+  }
 
   // ---------- panel ----------
 
@@ -40,8 +42,9 @@
     if (!slot) return false;
     els.tool = {};
     var tools = h('div', { class: 'tac-tools' });
-    [['pencil', 'Карандаш (P)'], ['arrow', 'Стрелка (A)'], ['zone', 'Зона (Z)'], ['marker', 'Метка (M)'],
-      ['text', 'Текст (T)'], ['eraser', 'Ластик (E)']].forEach(function (t) {
+    var toolList = ed.eraserOnly ? [['eraser', 'Стереть рисунок']] : [['pencil', 'Карандаш (P)'], ['arrow', 'Стрелка (A)'],
+      ['zone', 'Зона (Z)'], ['marker', 'Метка (M)'], ['text', 'Текст (T)'], ['eraser', 'Ластик (E)']];
+    toolList.forEach(function (t) {
       els.tool[t[0]] = h('button', { type: 'button', onclick: function () { setTool(t[0]); } }, t[1]);
       tools.appendChild(els.tool[t[0]]);
     });
@@ -64,10 +67,11 @@
     els.gate = h('p', { class: 'hint tac-gate' });
     els.status = h('p', { class: 'hint tac-status' });
     els.retry = h('div', { class: 'tac-retry' });
+    els.drawing = h('div', { hidden: ed.eraserOnly },
+      h('label', null, 'Рисую за'), els.squad, h('label', null, 'Толщина'), els.widths,
+      els.labelLbl, els.label, els.iconLbl, els.icon, els.hint);
     els.box = h('div', { class: 'tac-editor' },
-      h('div', { class: 'tac-controls' },
-        tools, h('label', null, 'Рисую за'), els.squad, h('label', null, 'Толщина'), els.widths,
-        els.labelLbl, els.label, els.iconLbl, els.icon, els.hint),
+      h('div', { class: 'tac-controls' }, tools, els.drawing),
       els.gate, els.status, els.retry);
     slot.appendChild(els.box);
     return true;
@@ -98,7 +102,7 @@
     els.iconLbl.hidden = els.icon.hidden = ed.tool !== 'marker';
     var gate = '';
     if (!hasPlan()) gate = 'Создайте или выберите план.';
-    else if (allowedSquads().length === 0) gate = 'Вам не назначен отряд для рисования.';
+    else if (!ed.eraserOnly && allowedSquads().length === 0) gate = 'Вам не назначен отряд для рисования.';
     els.box.classList.toggle('disabled', gate !== '');
     els.gate.textContent = gate;
   }
@@ -418,7 +422,7 @@
   // ---------- keyboard ----------
 
   function onKeyDown(e) {
-    if (!running || V.mode() !== 'tactics') return;
+    if (!running || V.mode() !== 'tactics' || ed.eraserOnly) return;
     var tag = ((e.target && e.target.tagName) || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target && e.target.isContentEditable)) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -477,10 +481,11 @@
 
   // ---------- start / stop ----------
 
-  function start(viewer, tactics) {
+  function start(viewer, tactics, opts) {
     if (running) stop();
     V = viewer;
     T = tactics;
+    ed.eraserOnly = !!(opts && opts.eraserOnly);
     map = V.leaflet();
     if (!map || !buildPanel()) return;
     running = true;
@@ -500,7 +505,7 @@
     document.addEventListener('keyup', onKeyUp);
     if (!changeHooked) { changeHooked = true; T.onChange(onTacticsChange); }
     fillSquads();
-    setTool('pencil');
+    setTool(ed.eraserOnly ? 'eraser' : 'pencil');
     onTacticsChange();
   }
 

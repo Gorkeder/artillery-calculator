@@ -257,3 +257,4 @@ body.tactics #mob-filters, body.tactics #mob-mod { display: none !important; }
 .leaflet-tooltip.tac-label::before { display: none; }
 .tac-editor input[type=text] { margin-bottom: 2px; }
 .tac-tools button { flex: 1 1 auto; }
+.tac-panel select { margin-bottom: 6px; }

@@ -10,7 +10,7 @@
   var V = null;
   var S = {
     on: false, clan: null, plans: [], plan: null, items: [], etag: null,
-    hiddenSquads: {}, onlyMine: false, updatedAt: 0, online: true,
+    hiddenSquads: {}, onlyMine: false, updatedAt: 0, online: true, admin: false, adminClans: [],
   };
   var layers = {};
   var group = null;
@@ -219,6 +219,16 @@
   }
 
   function reloadClan() {
+    if (S.admin) {
+      // The admin has no clan of their own here: re-read the clan that is open.
+      if (!S.clan) return Promise.resolve();
+      return api.get('/api/admin/clans/' + S.clan.clan.id).then(function (d) {
+        S.clan = adminBody(d, S.clan.me.id);
+        S.online = true;
+      }, function (err) {
+        if (err.status === 404) { S.clan = null; S.online = true; } else S.online = false;
+      });
+    }
     return api.get('/api/my/clan').then(function (body) {
       S.clan = body.clan ? body : null;
       S.online = true;
@@ -230,7 +240,7 @@
 
   function loadPlans(wantedPlan) {
     var map = V.state().map;
-    if (!map || !map.published) {
+    if (!map || !map.published || !S.clan) {
       S.plans = [];
       S.plan = null;
       S.items = [];
@@ -294,9 +304,10 @@
     els.rename = h('button', { type: 'button', hidden: true, onclick: renamePlan }, 'Переименовать');
     els.activate = h('button', { type: 'button', hidden: true, onclick: activatePlan }, 'Сделать активным');
     els.del = h('button', { type: 'button', class: 'danger', hidden: true, onclick: deletePlan }, 'Удалить');
+    els.clanSel = h('select', { 'aria-label': 'Клан', hidden: true, onchange: function () { pickClan(Number(els.clanSel.value)); } });
     els.panel = h('aside', { id: 'tac-panel', class: 'tac-panel', hidden: true },
       h('div', { class: 'tac-head' }, h('strong', null, 'Тактика'), h('span', { class: 'grow' }), els.state),
-      els.title, els.empty,
+      els.clanSel, els.title, els.empty,
       h('div', { class: 'tac-plan-btns' }, els.create, els.rename, els.activate, els.del),
       els.squads,
       h('div', { id: 'tac-tools-slot' }));
@@ -321,11 +332,11 @@
     });
     els.title.hidden = S.plans.length === 0;
     els.empty.hidden = S.plans.length !== 0;
-    var manage = hasPerm('plans_manage');
+    var manage = !S.admin && hasPerm('plans_manage');
     els.create.hidden = !manage;
     els.rename.hidden = !manage || !S.plan;
     els.activate.hidden = !manage || !S.plan || S.plan.active;
-    els.del.hidden = !manage || !S.plan;
+    els.del.hidden = !(manage || S.admin) || !S.plan;
     renderSquadFilter();
     updateState();
   }
@@ -382,11 +393,53 @@
     V.notice(text || (err.status === 429 ? 'Слишком часто, подождите минуту.' : 'Ошибка: ' + err.message));
   }
 
+  // ---------- site admin: any clan, read and erase only ----------
+
+  function adminBody(detail, adminId) {
+    return {
+      clan: detail.clan,
+      me: { id: adminId, isOwner: false, perms: ['tactics_view'], drawSquads: [] },
+      roles: [], squads: detail.squads, members: [],
+    };
+  }
+
+  function pickClan(clanId, wantedPlan) {
+    return api.get('/api/admin/clans/' + clanId).then(function (detail) {
+      if (!S.on) return null;
+      S.clan = adminBody(detail, V.state().me.user.id);
+      els.clanSel.value = String(clanId);
+      return loadPlans(wantedPlan);
+    }, function () { V.notice('Не удалось открыть клан.'); });
+  }
+
+  // The clan list comes from the admin API; a ?plan= link names its clan through the plan itself.
+  function startAdmin(opts) {
+    return api.get('/api/admin/clans').then(function (clans) {
+      if (!S.on) return null;
+      S.adminClans = clans;
+      els.clanSel.textContent = '';
+      clans.forEach(function (c) {
+        els.clanSel.appendChild(h('option', { value: String(c.id) }, '[' + c.tag + '] ' + c.name));
+      });
+      els.clanSel.hidden = clans.length === 0;
+      if (!clans.length) { S.clan = null; updatePanel(); return null; }
+      var wanted = opts && opts.plan;
+      var first = wanted
+        ? api.get('/api/plans/' + encodeURIComponent(wanted)).then(function (b) { return b.plan.clan_id; }, function () { return clans[0].id; })
+        : Promise.resolve(clans[0].id);
+      return first.then(function (clanId) {
+        if (!clans.some(function (c) { return c.id === clanId; })) clanId = clans[0].id;
+        return pickClan(clanId, wanted);
+      });
+    });
+  }
+
   // ---------- start / stop ----------
 
   function start(viewer, clanBody, opts) {
     V = viewer;
-    S.clan = clanBody;
+    S.admin = !!(opts && opts.admin);
+    S.clan = S.admin ? null : clanBody;
     S.on = true;
     S.plans = [];
     S.plan = null;
@@ -405,8 +458,10 @@
     clearInterval(clock);
     timer = setInterval(poll, POLL_MS);
     clock = setInterval(updateState, 1000);
+    els.clanSel.hidden = true;
     updatePanel();
-    return loadPlans(opts && opts.plan).then(updateUrl);
+    var ready = S.admin ? startAdmin(opts) : loadPlans(opts && opts.plan);
+    return ready.then(updateUrl);
   }
 
   function stop(silent) {
@@ -450,7 +505,8 @@
     plan: function () { return S.plan; },
     clan: function () { return S.clan; },
     planPublicId: function () { return S.plan ? S.plan.id : null; },
-    canDraw: function () { return hasPerm('tactics_draw'); },
+    canDraw: function () { return !S.admin && hasPerm('tactics_draw'); },
+    isAdmin: function () { return S.admin; },
     canManage: function () { return hasPerm('plans_manage'); },
     squads: function () { return S.clan ? S.clan.squads : []; },
     drawSquads: function () { return S.clan ? S.clan.me.drawSquads : []; },
