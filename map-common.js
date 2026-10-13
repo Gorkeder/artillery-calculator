@@ -26,6 +26,25 @@
     });
   }
 
+  // GET with If-None-Match. A 304 is not an error here: the plan did not change.
+  function getConditional(url, etag) {
+    var headers = { 'X-Requested-With': 'anoma' };
+    if (etag) headers['If-None-Match'] = etag;
+    return fetch(url, { method: 'GET', headers: headers, credentials: 'same-origin' }).then(function (res) {
+      if (res.status === 304) return { status: 304, etag: res.headers.get('ETag') || etag, data: null };
+      return res.text().then(function (text) {
+        var data = null;
+        try { data = text ? JSON.parse(text) : null; } catch (e) { /* not json */ }
+        if (!res.ok) {
+          var err = new Error((data && data.error) || 'HTTP ' + res.status);
+          err.status = res.status;
+          throw err;
+        }
+        return { status: res.status, etag: res.headers.get('ETag'), data: data };
+      });
+    });
+  }
+
   window.MapApi = {
     get: function (url) { return request('GET', url); },
     post: function (url, json) { return request('POST', url, { json: json }); },
@@ -33,6 +52,7 @@
     put: function (url, json) { return request('PUT', url, { json: json }); },
     del: function (url) { return request('DELETE', url); },
     upload: function (method, url, blob) { return request(method, url, { raw: blob }); },
+    getConditional: getConditional,
   };
 
   function append(el, child) {
