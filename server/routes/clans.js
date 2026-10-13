@@ -1,12 +1,16 @@
 'use strict';
 
-const { HttpError, readJson } = require('../http-util');
+const { HttpError, readJson, readBody } = require('../http-util');
+const { sniffImageType, imageSize } = require('../validate');
 const { can } = require('../permissions');
 const { memberContext, outranks } = require('../clan-permissions');
 const { validateClan, clanKey } = require('../clan-validate');
-const { unlinkAll } = require('../files');
+const { EXT, storeFile, unlinkAll } = require('../files');
 const clanRepo = require('../clan-repo');
 const { need, limitWrites, checked, intParam, memberOf, requirePerm, memberOrAdmin, memberTarget } = require('../clan-http');
+
+const MAX_EMBLEM_BYTES = 200 * 1024;
+const MAX_EMBLEM_SIDE = 1024;
 
 function uniqueOrThrow(db, fields, exceptId) {
   if (fields.tag !== undefined && clanRepo.keyTaken(db, 'tag_key', clanKey(fields.tag), exceptId)) {
@@ -85,6 +89,40 @@ module.exports = [
       const { clan } = memberOrAdmin(c, 'owner');
       limitWrites(c);
       c.db.prepare('DELETE FROM clans WHERE id = ?').run(clan.id);
+      unlinkAll(c.uploadsDir, [clan.emblem_path]);
+      return { body: clanRepo.myClanBody(c.db, c.user.id) };
+    },
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/clans/:id/emblem',
+    handler: async (c) => {
+      requirePerm(memberOf(c), 'clan_settings');
+      limitWrites(c);
+      // The declared Content-Type is ignored: only the file signature counts.
+      const buf = await readBody(c.req, MAX_EMBLEM_BYTES);
+      if (buf.length === 0) throw new HttpError(400, 'empty body');
+      const type = sniffImageType(buf);
+      const size = type ? imageSize(buf) : null;
+      if (!size || size.width < 1 || size.height < 1 || size.width > MAX_EMBLEM_SIDE || size.height > MAX_EMBLEM_SIDE) {
+        throw new HttpError(400, 'emblem_invalid');
+      }
+      const ctx = memberOf(c); // re-read after the await: the clan or the permission may be gone
+      requirePerm(ctx, 'clan_settings');
+      const old = clanRepo.getClan(c.db, ctx.clanId).emblem_path;
+      const rel = storeFile(c.uploadsDir, 'clans', buf, EXT[type]);
+      c.db.prepare('UPDATE clans SET emblem_path = ? WHERE id = ?').run(rel, ctx.clanId);
+      unlinkAll(c.uploadsDir, [old]);
+      return { body: clanRepo.myClanBody(c.db, c.user.id) };
+    },
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/clans/:id/emblem',
+    handler: async (c) => {
+      const { clan } = memberOrAdmin(c, 'clan_settings');
+      limitWrites(c);
+      c.db.prepare('UPDATE clans SET emblem_path = NULL WHERE id = ?').run(clan.id);
       unlinkAll(c.uploadsDir, [clan.emblem_path]);
       return { body: clanRepo.myClanBody(c.db, c.user.id) };
     },
