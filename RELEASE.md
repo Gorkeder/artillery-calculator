@@ -497,9 +497,15 @@ SPF-записей станет две и проверка сломается.
 **Что выкатывается:** миграция 6 (таблицы кланов, `users.clans_blocked`) применяется сама при старте `anoma-api`.
 Новые страницы `clan.html`, `clan.css`, `clan*.js` уходят обычным rsync.
 
-**nginx (руками, один раз):** добавить в HTTPS `server { }` блоки из `server/deploy/nginx-map.conf`
-(`/clan`, `/clans`, `/clans/`, `/clan/join/`), затем `sudo nginx -t && sudo systemctl reload nginx`.
-Без них `/clan` отдаёт 404, а API работает.
+**nginx (руками, один раз) — ДО мерджа и пуша в `master`:** добавить в HTTPS `server { }` блоки из
+`server/deploy/nginx-map.conf` (`/clan`, `/clans`, `/clans/`, `/clan/join/`), затем
+`sudo nginx -t && sudo systemctl reload nginx`. На главной появляется ссылка «Кланы» на `/clans`, и без этих
+блоков она отдаёт 404 (API при этом работает), поэтому сначала nginx, потом пуш.
+
+**Удаление аккаунта лидера:** нельзя, пока он не передал лидерство или клан не удалён
+(`DELETE /api/clans/<id>`) — внешний ключ `clans.owner_id` не каскадный.
+
+**Как узнать `<id>` клана:** `sudo sqlite3 /var/lib/anoma/db/anoma.db "SELECT id, tag, name FROM clans"`.
 
 **Эмблемы** лежат в `/var/lib/anoma/uploads/clans/` и попадают в существующий бэкап загрузок.
 

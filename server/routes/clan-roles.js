@@ -237,7 +237,8 @@ module.exports = [
           const changed = ids.filter((x) => !current.includes(x)).concat(current.filter((x) => !ids.includes(x)));
           for (const rid of changed) {
             const role = byId.get(rid);
-            if (!roleBelow(ctx, role) || !permChangeAllowed(ctx, 0, role.perms)) throw new HttpError(403, 'role_above');
+            if (!roleBelow(ctx, role)) throw new HttpError(403, 'role_above');
+            if (!permChangeAllowed(ctx, 0, role.perms)) throw new HttpError(403, 'perm_not_held');
             // A lower role must not widen draw rights beyond the assigner's own squads.
             if (role.perms & PERMS.tactics_draw) {
               checkDrawScope(ctx, Boolean(role.draw_all_squads), roleSquadIds(c.db, role.id));

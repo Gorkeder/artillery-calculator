@@ -128,7 +128,7 @@
       var transfer = h('button', { type: 'button', disabled: !others.length }, 'Передать лидерство');
       transfer.addEventListener('click', function () {
         var target = others.filter(function (m) { return String(m.id) === who.value; })[0];
-        if (!target || !window.confirm('Передать лидерство игроку ' + target.login + '? Вернуть его сможет только новый лидер.')) return;
+        if (!target || !window.confirm('Передать лидерство игроку ' + target.login + '? Вернуть его сможет только новый лидер. У вас останутся только те роли, что вы уже носите (без ролей — только права @everyone).')) return;
         C.act(transfer, err, function () { return api.post(base + '/transfer', { userId: target.id }).then(C.set); });
       });
       var confirmTag = C.field('Введите тег клана, чтобы подтвердить удаление', { type: 'text', autocomplete: 'off' });

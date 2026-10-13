@@ -64,7 +64,14 @@
     errEl.textContent = '';
     Promise.resolve()
       .then(work)
-      .catch(function (ex) { errEl.textContent = errorText(ex); })
+      .catch(function (ex) {
+        if (ex && ex.status === 404 && (ex.message === 'clan not found' || ex.message === 'member not found')) {
+          // The clan was deleted or the user was removed while the page was open.
+          errEl.textContent = 'Состав клана изменился, обновляем страницу.';
+          return Clan.reload();
+        }
+        errEl.textContent = errorText(ex);
+      })
       .then(function () { btn.disabled = false; });
   }
 

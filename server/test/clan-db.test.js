@@ -69,3 +69,13 @@ test('deleting a squad drops role and member links to it', () => {
   assert.equal(count(db, 'clan_role_squads'), 0);
   assert.equal(count(db, 'clan_squad_members'), 0);
 });
+
+test('a user who owns a clan cannot be deleted until the clan is gone', () => {
+  const db = openDb(':memory:');
+  const { owner, clanId } = seed(db);
+  assert.throws(() => db.prepare('DELETE FROM users WHERE id = ?').run(owner), /FOREIGN KEY/);
+  assert.equal(count(db, 'clans'), 1);
+  db.prepare('DELETE FROM clans WHERE id = ?').run(clanId);
+  db.prepare('DELETE FROM users WHERE id = ?').run(owner);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM users WHERE id = ?').get(owner).n, 0);
+});

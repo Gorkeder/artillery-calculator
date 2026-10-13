@@ -98,3 +98,19 @@ test('declining and revoking invitations', async (t) => {
   assert.deepEqual(rev.json.invitations, []);
   assert.equal((await as('bob')('GET', '/api/me')).json.user.clanInvitations, 0);
 });
+
+test('accepting an invitation into a full clan gives clan_full', async (t) => {
+  const { s, as, makeClan } = await clanSetup(t);
+  const clanId = await makeClan();
+  const inv = await as('alice')('POST', `/api/clans/${clanId}/invitations`, { login: 'carol' });
+  assert.equal(inv.status, 201);
+  const invId = inv.json.invitations[0].id;
+  for (let i = 0; i < 49; i++) {
+    const uid = Number(s.db.prepare("INSERT INTO users (login, password_hash) VALUES (?, 'x')").run('filler' + i).lastInsertRowid);
+    s.db.prepare('INSERT INTO clan_members (clan_id, user_id) VALUES (?, ?)').run(clanId, uid);
+  }
+  assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM clan_members WHERE clan_id = ?').get(clanId).n, 50);
+  const acc = await as('carol')('POST', `/api/invitations/${invId}/accept`, {});
+  assert.deepEqual([acc.status, acc.json.error], [409, 'clan_full']);
+  assert.equal(s.db.prepare('SELECT COUNT(*) AS n FROM clan_invitations WHERE id = ?').get(invId).n, 1);
+});

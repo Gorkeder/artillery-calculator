@@ -150,7 +150,7 @@ CREATE TABLE clans (
   name_key TEXT NOT NULL UNIQUE,
   description TEXT NOT NULL DEFAULT '',
   emblem_path TEXT,
-  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  owner_id INTEGER NOT NULL REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE clan_members (
