@@ -612,7 +612,7 @@ test('migration 5 marks proposals that were already waiting as submitted', () =>
   db.exec(`INSERT INTO features (map_id, category_id, geometry, title, status, author_id)
            VALUES (1, 1, '{"x":0,"y":0}', 'Waiting', 'pending', 1), (1, 1, '{"x":0.5,"y":0.5}', 'Public', 'approved', 1)`);
   migrate(db);
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 5);
+  assert.ok(db.prepare('PRAGMA user_version').get().user_version >= 5);
   const rows = db.prepare('SELECT title, submitted_at, flag FROM features ORDER BY id').all().map((r) => ({ ...r }));
   assert.ok(rows[0].submitted_at, 'a waiting proposal stays in the queue');
   assert.equal(rows[0].flag, null);

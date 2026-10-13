@@ -136,6 +136,87 @@ ALTER TABLE features ADD COLUMN flag TEXT;
 UPDATE features SET submitted_at = COALESCE(updated_at, datetime('now')) WHERE status = 'pending';
 `,
   },
+  {
+    // Clans, roles, squads and invitations (stage 1 of clans and tactics).
+    // Tags and names are unique by a key folded in JS: SQLite lower() does not fold Cyrillic.
+    version: 6,
+    sql: `
+ALTER TABLE users ADD COLUMN clans_blocked INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE clans (
+  id INTEGER PRIMARY KEY,
+  tag TEXT NOT NULL,
+  tag_key TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  name_key TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL DEFAULT '',
+  emblem_path TEXT,
+  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE clan_members (
+  clan_id INTEGER NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  joined_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_clan_members_clan ON clan_members(clan_id);
+CREATE TABLE clan_roles (
+  id INTEGER PRIMARY KEY,
+  clan_id INTEGER NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '#9a9a86',
+  position INTEGER NOT NULL,
+  perms INTEGER NOT NULL DEFAULT 0,
+  draw_all_squads INTEGER NOT NULL DEFAULT 0,
+  is_everyone INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX idx_clan_roles_clan ON clan_roles(clan_id, position);
+CREATE TABLE clan_squads (
+  id INTEGER PRIMARY KEY,
+  clan_id INTEGER NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX idx_clan_squads_clan ON clan_squads(clan_id);
+CREATE TABLE clan_role_squads (
+  role_id INTEGER NOT NULL REFERENCES clan_roles(id) ON DELETE CASCADE,
+  squad_id INTEGER NOT NULL REFERENCES clan_squads(id) ON DELETE CASCADE,
+  PRIMARY KEY (role_id, squad_id)
+);
+CREATE TABLE clan_member_roles (
+  user_id INTEGER NOT NULL REFERENCES clan_members(user_id) ON DELETE CASCADE,
+  role_id INTEGER NOT NULL REFERENCES clan_roles(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, role_id)
+);
+CREATE TABLE clan_squad_members (
+  squad_id INTEGER NOT NULL REFERENCES clan_squads(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES clan_members(user_id) ON DELETE CASCADE,
+  PRIMARY KEY (squad_id, user_id)
+);
+CREATE INDEX idx_clan_squad_members_user ON clan_squad_members(user_id);
+CREATE TABLE clan_invites (
+  id INTEGER PRIMARY KEY,
+  token_hash TEXT NOT NULL UNIQUE,
+  clan_id INTEGER NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER,
+  max_uses INTEGER,
+  uses INTEGER NOT NULL DEFAULT 0,
+  revoked INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX idx_clan_invites_clan ON clan_invites(clan_id);
+CREATE TABLE clan_invitations (
+  id INTEGER PRIMARY KEY,
+  clan_id INTEGER NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  invited_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (clan_id, user_id)
+);
+CREATE INDEX idx_clan_invitations_user ON clan_invitations(user_id);
+`,
+  },
 ];
 
 function migrate(db) {
