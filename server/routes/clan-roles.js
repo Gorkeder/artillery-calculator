@@ -114,7 +114,9 @@ module.exports = [
       const drawAll = f.draw_all_squads !== undefined ? f.draw_all_squads : role.draw_all_squads;
       const squads = f.squads !== undefined ? f.squads : current;
       // Only a real change of the draw scope is checked, so editing the name of a wide role stays possible.
-      if (drawAll !== role.draw_all_squads || !sameSet(squads, current)) {
+      const newPerms = f.perms !== undefined ? f.perms : role.perms;
+      const gainsDraw = (newPerms & PERMS.tactics_draw) && !(role.perms & PERMS.tactics_draw);
+      if (gainsDraw || drawAll !== role.draw_all_squads || !sameSet(squads, current)) {
         checkDrawScope(ctx, Boolean(drawAll), squads);
         assertSquadsInClan(c.db, ctx.clanId, squads);
       }

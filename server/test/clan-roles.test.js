@@ -144,3 +144,20 @@ test('assigning a role cannot widen draw rights beyond the assigner scope', asyn
   assert.deepEqual([b.status, b.json.error], [403, 'squad_not_held']);
   assert.equal((await put(users.carol.id, alphaRole)).status, 200);
 });
+
+test('patching a role to gain tactics_draw re-checks its stored draw scope', async (t) => {
+  const { s, as, base, id, grantRole } = await setup(t);
+  const alpha = (await as('alice')('POST', base + '/squads', { name: 'Alpha' })).json.squads[0].id;
+  const bravo = (await as('alice')('POST', base + '/squads', { name: 'Bravo' })).json.squads[1].id;
+  const cmd = grantRole(id, 'bob', 'Alpha cmd', 5, PERMS.roles_manage | PERMS.tactics_draw);
+  s.db.prepare('INSERT INTO clan_role_squads (role_id, squad_id) VALUES (?, ?)').run(cmd, alpha);
+  const wide = grantRole(id, null, 'Wide', 2, 0, 1);
+  const br = grantRole(id, null, 'Bravo', 2, 0, 0);
+  s.db.prepare('INSERT INTO clan_role_squads (role_id, squad_id) VALUES (?, ?)').run(br, bravo);
+  for (const rid of [wide, br]) {
+    const r = await as('bob')('PATCH', `${base}/roles/${rid}`, { perms: ['tactics_draw'] });
+    assert.deepEqual([r.status, r.json.error], [403, 'squad_not_held']);
+  }
+  assert.equal((await as('alice')('PATCH', `${base}/roles/${wide}`, { perms: ['tactics_draw'] })).status, 200);
+  assert.equal((await as('alice')('PATCH', `${base}/roles/${br}`, { perms: ['tactics_draw'] })).status, 200);
+});
