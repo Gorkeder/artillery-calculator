@@ -36,6 +36,49 @@
 
   // ---------- drawing layer ----------
 
+  // Own set: the category icons in map-icons.js feed the category editor and must not grow tactical ones.
+  var TACTIC_ICONS = {
+    gather: { label: 'Сбор', svg: '<circle cx="12" cy="12" r="3"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/>' },
+    attack: { label: 'Атака', svg: '<path d="M4 20 20 4M14 4h6v6"/>' },
+    defend: { label: 'Оборона', svg: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/>' },
+    enemy: { label: 'Враг', svg: '<circle cx="12" cy="12" r="9"/><path d="m8 8 8 8M16 8l-8 8"/>' },
+    artillery: { label: 'Артиллерия', svg: '<circle cx="8" cy="17" r="3"/><path d="M10 15 20 5M16 4l4 4"/>' },
+    sniper: { label: 'Снайпер', svg: '<circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/>' },
+    danger: { label: 'Опасность', svg: '<path d="M12 3l10 18H2z"/><path d="M12 10v5"/><circle cx="12" cy="18" r=".6"/>' },
+    question: { label: 'Вопрос', svg: '<circle cx="12" cy="12" r="10"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><circle cx="12" cy="17" r=".6"/>' },
+  };
+
+  function iconNode(id) {
+    var def = TACTIC_ICONS[id] || TACTIC_ICONS.question;
+    var wrap = document.createElement('span');
+    wrap.className = 'ico';
+    // def.svg is static markup from the table above, never user input
+    wrap.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+      'stroke-linecap="round" stroke-linejoin="round">' + def.svg + '</svg>';
+    return wrap;
+  }
+
+  function permanentLabel(layer, text, direction) {
+    if (!text) return;
+    // bindTooltip takes a string as HTML: pass a text node holder instead
+    layer.bindTooltip(h('span', null, text), { permanent: true, direction: direction, className: 'tac-label', offset: [0, direction === 'bottom' ? 4 : 0] });
+  }
+
+  // CRS.Simple is linear, so the screen angle of the last segment does not depend on the zoom.
+  function arrowHead(points, size, color, width) {
+    var a = Geo.toLatLng({ x: points[points.length - 2][0], y: points[points.length - 2][1] }, size);
+    var b = Geo.toLatLng({ x: points[points.length - 1][0], y: points[points.length - 1][1] }, size);
+    var deg = Math.atan2(-(b[0] - a[0]), b[1] - a[1]) * 180 / Math.PI;
+    var px = 14 + 3 * width;
+    var el = h('div', { class: 'tac-head', style: 'width:' + px + 'px;height:' + px + 'px;transform:rotate(' + deg + 'deg)' });
+    // static markup, color validated on the server as a squad color (#rrggbb) or the shared constant
+    el.innerHTML = '<svg viewBox="0 0 20 20"><path d="M1 2 19 10 1 18 5 10z" fill="' + color + '"/></svg>';
+    return L.marker(b, {
+      icon: L.divIcon({ html: el, className: 'tac-head-wrap', iconSize: [px, px], iconAnchor: [px / 2, px / 2] }),
+      interactive: interactive, keyboard: false,
+    });
+  }
+
   function visible(item) {
     var key = item.squad_id === null ? 'shared' : String(item.squad_id);
     if (S.hiddenSquads[key]) return false;
@@ -48,13 +91,44 @@
   function makeLayer(item) {
     var size = V.size();
     if (!size) return null;
-    // Stage 3 adds the other kinds here; an unknown kind from a newer server is skipped, not fatal.
-    if (item.kind !== 'pencil') return null;
-    var layer = L.polyline(Geo.pointsToLatLngs(item.geometry, size), {
-      color: colorOf(item), weight: weightOf(item.width), opacity: 0.9, lineCap: 'round', lineJoin: 'round',
-      interactive: interactive, bubblingMouseEvents: false,
-    });
-    layer.itemId = item.id;
+    var color = colorOf(item);
+    var weight = weightOf(item.width);
+    var layer = null;
+    if (item.kind === 'pencil') {
+      layer = L.polyline(Geo.pointsToLatLngs(item.geometry, size), {
+        color: color, weight: weight, opacity: 0.9, lineCap: 'round', lineJoin: 'round',
+        interactive: interactive, bubblingMouseEvents: false,
+      });
+    } else if (item.kind === 'arrow') {
+      var line = L.polyline(Geo.pointsToLatLngs(item.geometry, size), {
+        color: color, weight: weight, opacity: 0.95, lineCap: 'round', lineJoin: 'round',
+        dashArray: '8 6', interactive: interactive, bubblingMouseEvents: false,
+      });
+      layer = L.featureGroup([line, arrowHead(item.geometry, size, color, item.width)]);
+    } else if (item.kind === 'zone') {
+      layer = L.polygon(Geo.pointsToLatLngs(item.geometry, size), {
+        color: color, fillColor: color, fillOpacity: 0.2, weight: Math.max(2, weight - 1),
+        interactive: interactive, bubblingMouseEvents: false,
+      });
+      permanentLabel(layer, item.label, 'center');
+    } else if (item.kind === 'marker') {
+      var mk = h('div', { class: 'mk tac-mk' }, iconNode(item.icon));
+      mk.style.setProperty('--c', color);
+      layer = L.marker(Geo.toLatLng({ x: item.geometry[0], y: item.geometry[1] }, size), {
+        icon: L.divIcon({ html: mk, className: 'mk-wrap', iconSize: [30, 30], iconAnchor: [15, 15] }),
+        interactive: interactive, keyboard: false,
+      });
+      permanentLabel(layer, item.label, 'bottom');
+    } else if (item.kind === 'text') {
+      var txt = h('div', { class: 'tac-text' }, item.label || '');
+      txt.style.color = color;
+      layer = L.marker(Geo.toLatLng({ x: item.geometry[0], y: item.geometry[1] }, size), {
+        icon: L.divIcon({ html: txt, className: 'tac-text-wrap', iconSize: null }),
+        interactive: interactive, keyboard: false,
+      });
+    }
+    // An unknown kind from a newer server is skipped, not fatal.
+    if (layer) layer.itemId = item.id;
     return layer;
   }
 
@@ -381,6 +455,8 @@
     squads: function () { return S.clan ? S.clan.squads : []; },
     drawSquads: function () { return S.clan ? S.clan.me.drawSquads : []; },
     colorOf: colorOf,
+    TACTIC_ICONS: TACTIC_ICONS,
+    iconNode: iconNode,
     layers: function () { return layers; },
     itemById: function (id) { return S.items.find(function (x) { return x.id === id; }) || null; },
     setInteractive: setInteractive,
