@@ -209,7 +209,14 @@ module.exports = [
       limitWrites(c);
       requirePerm(ctx, 'squads_manage');
       const squad = squadIn(c, ctx);
-      c.db.prepare('DELETE FROM clan_squads WHERE id = ?').run(squad.id);
+      clanRepo.tx(c.db, () => {
+        // Drawings of the squad become общие (ON DELETE SET NULL); pollers must see that.
+        c.db.prepare(
+          `UPDATE tactic_plans SET version = version + 1, updated_at = datetime('now')
+           WHERE id IN (SELECT DISTINCT plan_id FROM tactic_items WHERE squad_id = ?)`,
+        ).run(squad.id);
+        c.db.prepare('DELETE FROM clan_squads WHERE id = ?').run(squad.id);
+      });
       return body(c);
     },
   },

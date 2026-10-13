@@ -362,3 +362,13 @@ test('PATCH ignores a client __kind and rejects non-object bodies and kind chang
   assert.equal((await as('alice')('PATCH', '/api/items/' + it.id, {})).status, 400);
 });
 
+
+test('deleting a squad turns its drawings общими and refreshes the plans that held them', async (t) => {
+  const { as, pid, alpha, base } = await withSquads(t);
+  await as('carol')('POST', `/api/plans/${pid}/items`, { kind: 'pencil', geometry: PENCIL, squad: alpha });
+  const before = (await as('alice')('GET', '/api/plans/' + pid)).json.plan.version;
+  assert.equal((await as('alice')('DELETE', `${base}/squads/${alpha}`)).status, 200);
+  const after = (await as('alice')('GET', '/api/plans/' + pid)).json;
+  assert.equal(after.items[0].squad_id, null);
+  assert.ok(after.plan.version > before);
+});
