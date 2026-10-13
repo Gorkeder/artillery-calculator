@@ -364,11 +364,16 @@ test('PATCH ignores a client __kind and rejects non-object bodies and kind chang
 
 
 test('deleting a squad turns its drawings общими and refreshes the plans that held them', async (t) => {
-  const { as, pid, alpha, base } = await withSquads(t);
+  const { as, s, pid, alpha, base, users, mapId } = await withSquads(t);
+  const other = (await as('alice')('POST', base + '/plans', { mapId, title: 'Other' })).json.plan.id;
   await as('carol')('POST', `/api/plans/${pid}/items`, { kind: 'pencil', geometry: PENCIL, squad: alpha });
   const before = (await as('alice')('GET', '/api/plans/' + pid)).json.plan.version;
+  const otherBefore = (await as('alice')('GET', '/api/plans/' + other)).json.plan.version;
   assert.equal((await as('alice')('DELETE', `${base}/squads/${alpha}`)).status, 200);
   const after = (await as('alice')('GET', '/api/plans/' + pid)).json;
   assert.equal(after.items[0].squad_id, null);
   assert.ok(after.plan.version > before);
+  assert.equal(s.db.prepare('SELECT updated_by FROM tactic_plans WHERE public_id = ?').get(pid).updated_by, users.alice.id);
+  const otherAfter = (await as('alice')('GET', '/api/plans/' + other)).json.plan;
+  assert.equal(otherAfter.version, otherBefore, 'plan without drawings of the squad is untouched');
 });

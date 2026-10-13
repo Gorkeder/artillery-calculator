@@ -212,9 +212,9 @@ module.exports = [
       clanRepo.tx(c.db, () => {
         // Drawings of the squad become общие (ON DELETE SET NULL); pollers must see that.
         c.db.prepare(
-          `UPDATE tactic_plans SET version = version + 1, updated_at = datetime('now')
+          `UPDATE tactic_plans SET version = version + 1, updated_at = datetime('now'), updated_by = ?
            WHERE id IN (SELECT DISTINCT plan_id FROM tactic_items WHERE squad_id = ?)`,
-        ).run(squad.id);
+        ).run(c.user.id, squad.id);
         c.db.prepare('DELETE FROM clan_squads WHERE id = ?').run(squad.id);
       });
       return body(c);
