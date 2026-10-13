@@ -377,3 +377,20 @@ test('deleting a squad turns its drawings общими and refreshes the plans t
   const otherAfter = (await as('alice')('GET', '/api/plans/' + other)).json.plan;
   assert.equal(otherAfter.version, otherBefore, 'plan without drawings of the squad is untouched');
 });
+
+test('a squad commander cannot PATCH another squad or a shared item; the site admin cannot PATCH or clear', async (t) => {
+  const { as, pid, alpha, bravo } = await withSquads(t);
+  const post = async (body) => (await as('carol')('POST', `/api/plans/${pid}/items`, { kind: 'pencil', geometry: PENCIL, ...body })).json.item;
+  const inBravo = await post({ squad: bravo });
+  const shared = await post({});
+  const mine = await post({ squad: alpha });
+  assert.equal((await as('bob')('PATCH', '/api/items/' + inBravo.id, { width: 3 })).status, 403);
+  assert.equal((await as('bob')('PATCH', '/api/items/' + shared.id, { width: 3 })).status, 403);
+  const adminPatch = await as('admin')('PATCH', '/api/items/' + mine.id, { width: 3 });
+  assert.equal(adminPatch.status >= 400, true, 'admin PATCH is not 2xx');
+  const adminClear = await as('admin')('POST', `/api/plans/${pid}/clear`);
+  assert.equal(adminClear.status >= 400, true, 'admin clear is not 2xx');
+  const body = (await as('alice')('GET', '/api/plans/' + pid)).json;
+  assert.equal(body.items.length, 3);
+  assert.equal(body.items.every((i) => i.width === inBravo.width), true, 'nothing changed');
+});

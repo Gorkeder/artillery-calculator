@@ -92,6 +92,22 @@
     S.online = true;
     render();
     updatePanel();
+    refreshClanForUnknownSquad();
+  }
+
+  // A drawing of a squad created or recoloured after the page opened: re-read the clan once, then redraw.
+  var reloadingClan = false;
+  function refreshClanForUnknownSquad() {
+    if (reloadingClan || !S.clan) return;
+    var unknown = S.items.some(function (it) { return it.squad_id !== null && !squadById(it.squad_id); });
+    if (!unknown) return;
+    reloadingClan = true;
+    reloadClan().then(function () {
+      reloadingClan = false;
+      if (!S.on) return;
+      render();
+      updatePanel();
+    });
   }
 
   function lostAccess(message) {
@@ -107,8 +123,11 @@
       if (!S.on || !S.plan || S.plan.id !== id) return;
       S.online = true;
       S.updatedAt = Date.now();
-      if (r.status === 200) applyPlanBody(r.data, r.etag);
-      else updateState();
+      if (r.status === 200) {
+        // An answer that was in flight during our own write is older than what we show: keep the current items.
+        if (r.data.plan.version < S.plan.version) updateState();
+        else applyPlanBody(r.data, r.etag);
+      } else updateState();
     }, function (err) {
       if (err.status === 404 || err.status === 403) {
         // The plan was deleted, or the member lost access: re-read what the clan still offers.
@@ -161,11 +180,16 @@
     });
   }
 
+  var openSeq = 0;
+
   function openPlan(publicId) {
+    var seq = ++openSeq;
     return api.get('/api/plans/' + encodeURIComponent(publicId)).then(function (body) {
+      if (seq !== openSeq || !S.on) return;
       applyPlanBody(body, '"v' + body.plan.version + '"');
       updateUrl();
     }, function (err) {
+      if (seq !== openSeq || !S.on) return null;
       if (err.status === 404 || err.status === 403) return loadPlans();
       V.notice('Не удалось загрузить план.');
       return null;

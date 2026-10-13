@@ -457,8 +457,23 @@
     return tacticsReady;
   }
 
+  // The drawing part is cached like the viewer part: re-entering must never load (and start) a second copy.
+  var tacticsEditorReady = null;
+
+  function loadTacticsEditor() {
+    if (!tacticsEditorReady) {
+      tacticsEditorReady = loadScript('/map-tactics-editor.js').catch(function (e) { tacticsEditorReady = null; throw e; });
+    }
+    return tacticsEditorReady;
+  }
+
+  // Bumped on every enter/leave: a chain started by an earlier entry must not touch the page any more.
+  var tacticsReq = 0;
+
   function enterTactics() {
     if (!state.clan || state.mode === 'tactics') return;
+    var req = ++tacticsReq;
+    function stale() { return req !== tacticsReq || state.mode !== 'tactics'; }
     state.prevMode = state.mode;
     state.mode = 'tactics';
     closeCard(true);
@@ -469,27 +484,48 @@
     if (window.MapMarks) window.MapMarks.setSuspended(true);
     state.drawTool = false;
     loadTactics().then(function () {
-      if (state.mode !== 'tactics') return null;
+      if (stale()) return null;
+      // Squads, colours and permissions may have changed since the page opened.
+      return api.get('/api/my/clan').then(function (body) {
+        if (stale() || !body.clan) return;
+        state.clan = body;
+      }, function () { /* keep the copy we have */ });
+    }).then(function () {
+      if (stale()) return null;
+      var c = state.clan;
+      if (!(c.me.isOwner || c.me.perms.indexOf('tactics_view') >= 0)) {
+        if ($('mob-tactics')) $('mob-tactics').hidden = true;
+        notice('Доступ к тактике закрыт.');
+        leaveTactics();
+        return null;
+      }
       var q = new URLSearchParams(location.search);
       return window.MapTactics.start(window.MapViewer, state.clan, { plan: q.get('plan') });
     }).then(function () {
-      if (state.mode !== 'tactics') return null;
+      if (stale()) return null;
       if ($('mob-tactics')) $('mob-tactics').classList.add('on');
       if (window.matchMedia('(min-width: 900px)').matches && window.MapTactics.canDraw()) {
-        return loadScript('/map-tactics-editor.js').then(function () { window.MapTacticsEditor.start(window.MapViewer, window.MapTactics); });
+        return loadTacticsEditor().then(function () {
+          if (stale()) return;
+          // start() stops a running copy first, so a second call never double-binds.
+          window.MapTacticsEditor.start(window.MapViewer, window.MapTactics);
+        });
       }
       return null;
-    }).then(function () {
-      // Left (or closed by the server) while the editor script was loading: make sure it did not start.
-      if (state.mode !== 'tactics' && window.MapTacticsEditor) window.MapTacticsEditor.stop();
-    }).catch(function () { notice('Не удалось открыть тактику.'); leaveTactics(); });
+    }).catch(function () {
+      if (stale()) return;
+      notice('Не удалось открыть тактику.');
+      leaveTactics();
+    });
   }
 
   function leaveTactics() {
+    tacticsReq++;
     if (state.mode !== 'tactics') return;
     state.mode = state.prevMode || 'shared';
-    if (window.MapTactics) window.MapTactics.stop();
+    // The editor goes first: it still sees the module as active and hands the layer back to non-interactive.
     if (window.MapTacticsEditor) window.MapTacticsEditor.stop();
+    if (window.MapTactics) window.MapTactics.stop();
     if ($('mob-tactics')) $('mob-tactics').classList.remove('on');
     if (window.MapMarks) window.MapMarks.setSuspended(false);
     // Hand the toolbars back: the admin returns to the editor mode they left, others to their marks.

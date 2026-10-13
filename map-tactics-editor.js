@@ -141,6 +141,11 @@
 
   function onMove(e) {
     var ev = e.originalEvent || {};
+    // The button was released outside the window and the mouseup never arrived.
+    if (ev.buttons === 0) {
+      if (ed.pan) ed.pan = null;
+      if (ed.drawing) { finishStroke(); return; }
+    }
     if (ed.pan) {
       map.panBy([ed.pan.x - ev.clientX, ed.pan.y - ev.clientY], { animate: false });
       ed.pan = { x: ev.clientX, y: ev.clientY };
