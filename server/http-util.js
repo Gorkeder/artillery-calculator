@@ -45,6 +45,12 @@ async function readJson(req, limit = 100 * 1024) {
 }
 
 function sendJson(res, status, body, headers = {}) {
+  // A 304 has no body and must not announce one; the caller passes ETag in `headers`.
+  if (status === 304) {
+    res.writeHead(304, { 'Cache-Control': 'no-store', ...headers });
+    res.end();
+    return;
+  }
   const data = Buffer.from(JSON.stringify(body));
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
