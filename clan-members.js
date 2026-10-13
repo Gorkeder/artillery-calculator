@@ -19,6 +19,14 @@
   }
   C.checkboxList = checkboxList;
 
+  // True when the actor may hand out this role's draw scope (mirrors the server's squad_not_held check).
+  C.drawScopeHeld = function (role) {
+    var me = C.data.me;
+    if (me.isOwner || role.perms.indexOf('tactics_draw') < 0 || me.drawSquads === 'all') return true;
+    if (role.draw_all_squads) return false;
+    return role.squads.every(function (id) { return me.drawSquads.indexOf(id) >= 0; });
+  };
+
   C.tabs.members = function (el) {
     var d = C.data;
     var err = h('p', { class: 'err', role: 'alert' });
@@ -32,7 +40,7 @@
       var squads = null;
       if (editRoles) {
         var assignable = d.roles.filter(function (r) { return !r.everyone; });
-        roles = checkboxList(assignable, m.roles, function (r) { return C.roleBelow(r) && C.permsHeld(r.perms); });
+        roles = checkboxList(assignable, m.roles, function (r) { return C.roleBelow(r) && C.permsHeld(r.perms) && C.drawScopeHeld(r); });
         box.appendChild(h('div', { class: 'muted' }, 'Роли'));
         box.appendChild(assignable.length ? roles.el : h('p', { class: 'muted' }, 'Ролей пока нет.'));
       }

@@ -114,7 +114,7 @@
     });
 
     var holder = h('div');
-    var add = h('button', { type: 'button', class: 'primary', disabled: d.roles.length - 1 >= d.limits.roles }, 'Создать роль');
+    var add = h('button', { type: 'button', class: 'primary', disabled: d.roles.length - 1 >= d.limits.roles || (!d.me.isOwner && d.me.top < 1) }, 'Создать роль');
     add.addEventListener('click', function () {
       if (holder.firstChild) { holder.textContent = ''; return; }
       holder.appendChild(roleEditor(null, function () { holder.textContent = ''; }));
