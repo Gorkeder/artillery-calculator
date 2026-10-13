@@ -15,6 +15,7 @@ const ROUTE_MODULES = [
   require('./routes/clans'),
   require('./routes/clan-roles'),
   require('./routes/tactics'),
+  require('./routes/admin-clans'),
 ];
 
 function compile(pattern) {
