@@ -233,3 +233,10 @@ body.tactics #mob-filters, body.tactics #mob-mod { display: none !important; }
 @media (max-width: 720px) {
   .tac-panel { right: 10px; width: auto; top: 124px; }
 }
+.map.tac-pencil, .map.tac-pencil .leaflet-interactive { cursor: crosshair; }
+.tac-editor { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.tac-editor label { display: block; margin: 8px 0 2px; color: var(--muted); font-size: 12px; }
+.tac-editor.disabled .tac-controls { opacity: .5; pointer-events: none; }
+.tac-tools, .tac-widths, .tac-retry { display: flex; gap: 6px; flex-wrap: wrap; }
+.tac-tools button.on, .tac-widths button.on { background: var(--accent); color: #151510; }
+.tac-status { min-height: 18px; }
