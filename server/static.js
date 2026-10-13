@@ -39,6 +39,10 @@ function createStaticHandler({ root, uploadsDir }) {
     if (pathname === '/map') pathname = '/map.html';
     if (pathname === '/account') pathname = '/account.html';
     if (pathname === '/privacy') pathname = '/privacy.html';
+    if (pathname === '/clan' || pathname === '/clans' || /^\/clans\/[^/]+$/.test(pathname)
+      || /^\/clan\/join\/[^/]+$/.test(pathname)) {
+      pathname = '/clan.html';
+    }
 
     let base = rootDir;
     let rel = pathname;
