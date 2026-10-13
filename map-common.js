@@ -30,6 +30,7 @@
     get: function (url) { return request('GET', url); },
     post: function (url, json) { return request('POST', url, { json: json }); },
     patch: function (url, json) { return request('PATCH', url, { json: json }); },
+    put: function (url, json) { return request('PUT', url, { json: json }); },
     del: function (url) { return request('DELETE', url); },
     upload: function (method, url, blob) { return request(method, url, { raw: blob }); },
   };

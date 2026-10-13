@@ -438,7 +438,7 @@
   function setupAuth() {
     var btn = $('auth-btn');
     var user = state.me.user;
-    var label = user ? 'Аккаунт: ' + user.login : 'Войти';
+    var label = user ? 'Аккаунт: ' + (user.clan ? '[' + user.clan.tag + '] ' : '') + user.login : 'Войти';
     btn.hidden = false;
     btn.href = user ? '/account' : '/account?next=' + encodeURIComponent(location.pathname + location.search);
     btn.title = label;

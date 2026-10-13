@@ -99,3 +99,11 @@ test('drafts: only the author edits a draft; sending and withdrawing follow the 
   assert.equal(can(user, 'feature:delete', sent), true, 'a sent proposal can still be deleted');
   assert.equal(can(null, 'feature:submit', draft), false);
 });
+
+test('clan:create needs a verified e-mail and no clan block', () => {
+  assert.equal(can(user, 'clan:create', { emailVerified: true, clansBlocked: false }), true);
+  assert.equal(can(user, 'clan:create', { emailVerified: false, clansBlocked: false }), false);
+  assert.equal(can(user, 'clan:create', { emailVerified: true, clansBlocked: true }), false);
+  assert.equal(can(user, 'clan:create'), false);
+  assert.equal(can(null, 'clan:create', { emailVerified: true, clansBlocked: false }), false);
+});

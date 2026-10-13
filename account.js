@@ -288,6 +288,8 @@
     show(
       h('h1', null, user.login),
       h('p', { class: 'muted' }, user.email ? 'Почта: ' + user.email : 'Почта не указана'),
+      h('p', null, h('a', { href: '/clan' }, user.clan ? 'Мой клан [' + user.clan.tag + ']' : 'Кланы'),
+        user.clanInvitations ? ' · приглашений: ' + user.clanInvitations : ''),
       user.role === 'admin' ? h('p', null, h('a', { href: '/map' }, 'Открыть карту (редактор)')) : h('p', null, h('a', { href: '/map' }, 'Открыть карту')),
       h('h2', null, 'Смена пароля'), pwForm,
       h('h2', null, 'Где выполнен вход'), list, h('div', { class: 'row' }, revoke),

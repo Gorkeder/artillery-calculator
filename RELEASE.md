@@ -491,3 +491,32 @@ SPF-записей станет две и проверка сломается.
 
 **Откат.** Убрать `MAIL_MODE` из `/etc/anoma/api.env` и перезапустить сервис — регистрация отключится.
 Миграция БД обратима только из бэкапа; новые колонки старый код игнорирует.
+
+## Кланы (этап 1)
+
+**Что выкатывается:** миграция 6 (таблицы кланов, `users.clans_blocked`) применяется сама при старте `anoma-api`.
+Новые страницы `clan.html`, `clan.css`, `clan*.js` уходят обычным rsync.
+
+**nginx (руками, один раз) — ДО мерджа и пуша в `master`:** добавить в HTTPS `server { }` блоки из
+`server/deploy/nginx-map.conf` (`/clan`, `/clans`, `/clans/`, `/clan/join/`), затем
+`sudo nginx -t && sudo systemctl reload nginx`. На главной появляется ссылка «Кланы» на `/clans`, и без этих
+блоков она отдаёт 404 (API при этом работает), поэтому сначала nginx, потом пуш.
+
+**Удаление аккаунта лидера:** нельзя, пока он не передал лидерство или клан не удалён
+(`DELETE /api/clans/<id>`) — внешний ключ `clans.owner_id` не каскадный.
+
+**Как узнать `<id>` клана:** `sudo sqlite3 /var/lib/anoma/db/anoma.db "SELECT id, tag, name FROM clans"`.
+
+**Эмблемы** лежат в `/var/lib/anoma/uploads/clans/` и попадают в существующий бэкап загрузок.
+
+**Админ:** закрыть пользователю создание кланов —
+`POST /api/users/<id>/block-clans {"blocked": true}` (из консоли браузера под админом:
+`fetch('/api/users/5/block-clans', {method: 'POST', headers: {'X-Requested-With': 'x', 'Content-Type': 'application/json'}, body: JSON.stringify({blocked: true})})`).
+Переименовать или удалить клан — `PATCH /api/clans/<id>`, `DELETE /api/clans/<id>`, сбросить эмблему —
+`DELETE /api/clans/<id>/emblem`. Отдельного интерфейса для админа пока нет (этап 3).
+
+**Ссылки-приглашения:** токен хранится только как SHA-256 хэш, поэтому потерянную ссылку показать повторно нельзя —
+создайте новую. `clan.html` ставит `<meta name="referrer" content="origin">` и очищает `url`/`referrer` в
+Яндекс.Метрике, так что токен из `/clan/join/<токен>` в аналитику не попадает.
+
+**Проверка после выката:** `/clans` открывается, `GET /api/clans` → `[]`, создать тестовый клан, удалить его.
