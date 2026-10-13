@@ -30,6 +30,7 @@
     forbidden: 'Недостаточно прав.',
     'payload too large': 'Файл больше 200 КБ.',
     emblem_invalid: 'Нужна картинка PNG, JPEG или WebP не больше 1024×1024.',
+    'cannot block an admin': 'Администратора заблокировать нельзя.',
   };
 
   function errorText(ex) {
@@ -142,6 +143,61 @@
     load();
   }
 
+  // Site-admin tools. Everything goes through the clan API; the server checks the role again.
+  function adminBlock(d) {
+    var err = h('p', { class: 'err', role: 'alert' });
+    var tag = h('input', { type: 'text', value: d.clan.tag, maxLength: 5, 'aria-label': 'Тег' });
+    var name = h('input', { type: 'text', value: d.clan.name, maxLength: 40, 'aria-label': 'Название' });
+    var save = h('button', { type: 'button', class: 'primary' }, 'Сохранить');
+    var resetDesc = h('button', { type: 'button' }, 'Сбросить описание');
+    var resetEmblem = h('button', { type: 'button' }, 'Сбросить эмблему');
+    var del = h('button', { type: 'button', class: 'danger' }, 'Удалить клан');
+    var base = '/api/clans/' + d.clan.id;
+
+    save.addEventListener('click', function () {
+      act(save, err, function () {
+        return api.patch(base, { tag: tag.value, name: name.value }).then(function () {
+          location.href = '/clans/' + encodeURIComponent(tag.value.trim());
+        });
+      });
+    });
+    resetDesc.addEventListener('click', function () {
+      act(resetDesc, err, function () { return api.patch(base, { description: '' }).then(function () { location.reload(); }); });
+    });
+    resetEmblem.addEventListener('click', function () {
+      act(resetEmblem, err, function () { return api.del(base + '/emblem').then(function () { location.reload(); }); });
+    });
+    del.addEventListener('click', function () {
+      if (!window.confirm('Удалить клан «' + d.clan.name + '» вместе с планами и рисунками? Это необратимо.')) return;
+      act(del, err, function () { return api.del(base).then(function () { location.href = '/clans'; }); });
+    });
+
+    var members = h('ul', { class: 'list' }, d.members.map(function (m) {
+      var cb = h('input', { type: 'checkbox', checked: m.clans_blocked });
+      cb.addEventListener('change', function () {
+        cb.disabled = true;
+        err.textContent = '';
+        api.post('/api/users/' + m.id + '/block-clans', { blocked: cb.checked }).then(function () {
+          cb.disabled = false;
+        }, function (ex) {
+          cb.checked = !cb.checked;
+          cb.disabled = false;
+          err.textContent = errorText(ex);
+        });
+      });
+      return h('li', null, h('span', { class: 'grow' }, m.owner ? '★ ' : '', m.login),
+        h('label', { class: 'muted' }, cb, ' закрыть создание кланов'));
+    }));
+
+    return h('section', { class: 'admin-block' },
+      h('h2', null, 'Администрирование'),
+      h('div', { class: 'row' }, tag, name, save),
+      h('div', { class: 'row' }, resetDesc, resetEmblem, del),
+      err,
+      h('h3', null, 'Участники'),
+      members);
+  }
+
   function showProfile(tag) {
     api.get('/api/clans/' + encodeURIComponent(tag)).then(function (c) {
       document.title = '[' + c.tag + '] ' + c.name + ' — ANOMA WIKI';
@@ -155,6 +211,16 @@
             m.roles.map(function (r) { return chip(r.name, r.color); }));
         })),
         h('p', null, h('a', { href: '/clans' }, '← Все кланы')));
+      // The profile is public and is already drawn; the admin tools are added only for a site admin.
+      api.get('/api/me').then(function (me) {
+        if (!me.user || me.user.role !== 'admin') return null;
+        return api.get('/api/admin/clans').then(function (list) {
+          var row = list.filter(function (x) { return x.tag.toLowerCase() === c.tag.toLowerCase(); })[0];
+          return row ? api.get('/api/admin/clans/' + row.id) : null;
+        });
+      }).then(function (detail) {
+        if (detail) app.appendChild(adminBlock(detail));
+      }).catch(function () { /* the public profile stays as it is */ });
     }).catch(function (ex) {
       show(h('h1', null, 'Клан'), h('p', { class: 'err' }, ex && ex.status === 404 ? 'Клан не найден.' : errorText(ex)),
         h('p', null, h('a', { href: '/clans' }, '← Все кланы')));
