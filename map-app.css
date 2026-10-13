@@ -255,3 +255,5 @@ body.tactics #mob-filters, body.tactics #mob-mod { display: none !important; }
   background: rgba(10, 10, 9, .78); color: var(--text); border: 0; box-shadow: none; padding: 1px 6px; font-size: 12px;
 }
 .leaflet-tooltip.tac-label::before { display: none; }
+.tac-editor input[type=text] { margin-bottom: 2px; }
+.tac-tools button { flex: 1 1 auto; }
