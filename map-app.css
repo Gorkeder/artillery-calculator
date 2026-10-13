@@ -45,6 +45,7 @@ input[type=text], input[type=search], input[type=password], input:not([type]), s
   flex: 0 1 auto; min-width: 0; max-width: 40vw;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.clan-link { flex: none; white-space: nowrap; text-decoration: none; }
 .mapwrap { flex: 1; min-height: 0; display: flex; }
 .side {
   width: 270px; flex: none; overflow: auto; padding: 10px;

@@ -7,9 +7,10 @@
     .then(function (res) { return res.ok ? res.json() : null; })
     .then(function (me) {
       if (!me || !me.user) return;
+      var u = me.user;
       Array.prototype.forEach.call(links, function (a) {
-        a.textContent = me.user.login;
-        a.title = 'Аккаунт';
+        a.textContent = (u.clan ? '[' + u.clan.tag + '] ' : '') + u.login + (u.clanInvitations ? ' (' + u.clanInvitations + ')' : '');
+        a.title = u.clanInvitations ? 'Аккаунт · приглашений в клан: ' + u.clanInvitations : 'Аккаунт';
       });
     })
     .catch(function () { /* stay with "Войти" */ });

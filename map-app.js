@@ -425,6 +425,14 @@
     btn.hidden = false;
     btn.textContent = user ? user.login : 'Войти';
     btn.title = user ? 'Аккаунт' : 'Вход и регистрация';
+    if (user) {
+      var clanLink = $('clan-link');
+      clanLink.hidden = false;
+      clanLink.textContent = user.clan
+        ? '[' + user.clan.tag + ']'
+        : (user.clanInvitations ? 'Клан (' + user.clanInvitations + ')' : 'Клан');
+      clanLink.title = user.clan ? 'Мой клан' : 'Кланы и приглашения';
+    }
     btn.addEventListener('click', function () {
       location.href = user
         ? '/account'

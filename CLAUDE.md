@@ -13,7 +13,7 @@ There is no build step and no linter for the static site; tests exist for the `s
 `tools/` scripts: `node --test server/test/*.test.js tools/*.test.js`. Don't invent other commands
 for them.
 
-## Статус проекта (обновлено 2026-10-11)
+## Статус проекта (обновлено 2026-10-13)
 
 Этот раздел поддерживается вручную: после каждой заметной работы обновляй «Сделано» / «Не сделано».
 
@@ -50,8 +50,17 @@ for them.
   остаётся черновиком до кнопки «Отправить на модерацию»; при отправке пустые объекты, дубли (в пределах 0,3% карты
   от существующего объекта той же категории) и частая отправка (5 за 10 минут) уходят в отдельную вкладку модерации,
   которую можно отклонить целиком (`POST /api/moderation/reject-flagged`). Классификация — `server/proposals.js`.
+- **Кланы, роли, отряды, приглашения (этап 1 кланов)** (ветка `clans-tactics`, миграция 6): страница `/clan`
+  (вкладки «Обзор», «Участники», «Роли», «Отряды», «Приглашения», «Настройки»), каталог `/clans`, профиль
+  `/clans/<TAG>`, вступление по ссылке `/clan/join/<токен>` и по приглашению по логину; роли как в Discord
+  (8 флагов, иерархия по позиции, «рисует для: все / выбранные отряды»), участник может быть в нескольких отрядах.
+  Сервер — `server/clan-*.js`, `server/routes/clan*.js`. Спек — `docs/superpowers/specs/2026-10-13-clans-tactics-design.md`,
+  план — `docs/superpowers/plans/2026-10-13-clans.md`.
 
 ### Не сделано / ждёт решения
+- Кланы: этап 2 (тактика: планы, опрос, карандаш, ластик) и этап 3 (стрелка, зона, метка, текст; админский
+  просмотр кланов) — отдельные планы по спеку `2026-10-13-clans-tactics-design.md`. На проде добавить nginx-блоки
+  `/clan*` (см. `RELEASE.md` → «Кланы»). Перед анонсом пройти `/clan` на 375 px и показать абзац «Кланы» в `/privacy`.
 - Ветки `map-editor-spec` и `user-accounts` уже влиты в `master` (`git branch --merged`); влить ветку
   `docs/postfix-mail` (merge локально или PR).
 - Следить за репутацией почты (Gmail, Mail.ru, Яндекс): пометки «Не спам», DMARC-отчёты на адрес из `rua`,
@@ -104,6 +113,10 @@ for them.
 - `account.html`, `account.js`, `account.css` — user account page (served at `/account`: login, registration,
   e-mail verification, password reset/change, session list). `account-nav.js` — header "Войти"/login link,
   included only by `index.html`. `privacy.html` — privacy policy draft (served at `/privacy`).
+- `clan.html`, `clan.css`, `clan.js` (+ вкладки `clan-members.js`, `clan-roles.js`, `clan-invites.js`) — clan page
+  served at `/clan`, `/clans`, `/clans/<TAG>`, `/clan/join/<token>` (one HTML file, routing by pathname).
+  Server: `server/clan-permissions.js` (role flags + hierarchy, pure), `clan-validate.js`, `clan-repo.js`,
+  `clan-http.js`, routes `routes/clans.js`, `routes/clan-roles.js`, `routes/clan-invites.js`.
 - `index.html` — landing page (hero, playtest calendar). Links to `styles.css`. The
   playtest calendar is hardcoded as a `PLAYTESTS` array inline in a `<script>` at the
   bottom of the file — add new playtests by editing that array directly, no CMS/data file.
