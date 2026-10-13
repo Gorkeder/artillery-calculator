@@ -13,7 +13,8 @@
   var map = null;
   var running = false;
   var changeHooked = false;
-  var ed = { tool: 'pencil', squad: null, width: 2, drawing: false, points: [], temp: null, spaceDown: false, pan: null, lastPx: null };
+  var ed = { tool: 'pencil', squad: null, width: 2, drawing: false, points: [], temp: null, spaceDown: false, pan: null, lastPx: null, verts: [], rubber: null };
+  var VERTEX_TOOLS = { arrow: { min: 2, max: 50 }, zone: { min: 3, max: 200 } };
   var pending = []; // strokes that could not be sent: { body, layer, pid }
   var erasing = {}; // item ids with a DELETE in flight
   var els = {};
@@ -21,7 +22,9 @@
   var lastPlan = null;
 
   function hasPlan() { return !!T.planPublicId(); }
-  function usable() { return running && V.mode() === 'tactics' && T.active() && hasPlan() && allowedSquads().length > 0; }
+  function usable() {
+    return running && V.mode() === 'tactics' && T.active() && hasPlan() && (ed.eraserOnly || allowedSquads().length > 0);
+  }
 
   // ---------- panel ----------
 
@@ -39,7 +42,9 @@
     if (!slot) return false;
     els.tool = {};
     var tools = h('div', { class: 'tac-tools' });
-    [['pencil', 'Карандаш (P)'], ['eraser', 'Ластик (E)']].forEach(function (t) {
+    var toolList = ed.eraserOnly ? [['eraser', 'Стереть рисунок']] : [['pencil', 'Карандаш (P)'], ['arrow', 'Стрелка (A)'],
+      ['zone', 'Зона (Z)'], ['marker', 'Метка (M)'], ['text', 'Текст (T)'], ['eraser', 'Ластик (E)']];
+    toolList.forEach(function (t) {
       els.tool[t[0]] = h('button', { type: 'button', onclick: function () { setTool(t[0]); } }, t[1]);
       tools.appendChild(els.tool[t[0]]);
     });
@@ -51,13 +56,22 @@
     [1, 2, 3].forEach(function (w) {
       els.widths.appendChild(h('button', { type: 'button', onclick: function () { ed.width = w; updateTools(); } }, String(w)));
     });
+    els.label = h('input', { type: 'text', maxLength: 120, placeholder: 'Подпись', 'aria-label': 'Подпись' });
+    els.labelLbl = h('label', null, 'Подпись');
+    els.icon = h('select', { 'aria-label': 'Иконка' });
+    Object.keys(T.TACTIC_ICONS).forEach(function (id) {
+      els.icon.appendChild(h('option', { value: id }, T.TACTIC_ICONS[id].label));
+    });
+    els.iconLbl = h('label', null, 'Иконка');
     els.hint = h('p', { class: 'hint' }, 'Карту двигайте правой кнопкой или пробелом.');
     els.gate = h('p', { class: 'hint tac-gate' });
     els.status = h('p', { class: 'hint tac-status' });
     els.retry = h('div', { class: 'tac-retry' });
+    els.drawing = h('div', { hidden: ed.eraserOnly },
+      h('label', null, 'Рисую за'), els.squad, h('label', null, 'Толщина'), els.widths,
+      els.labelLbl, els.label, els.iconLbl, els.icon, els.hint);
     els.box = h('div', { class: 'tac-editor' },
-      h('div', { class: 'tac-controls' },
-        tools, h('label', null, 'Рисую за'), els.squad, h('label', null, 'Толщина'), els.widths, els.hint),
+      h('div', { class: 'tac-controls' }, tools, els.drawing),
       els.gate, els.status, els.retry);
     slot.appendChild(els.box);
     return true;
@@ -83,9 +97,12 @@
     if (!els.box) return;
     Object.keys(els.tool).forEach(function (k) { els.tool[k].classList.toggle('on', ed.tool === k); });
     Array.prototype.forEach.call(els.widths.children, function (b, i) { b.classList.toggle('on', ed.width === i + 1); });
+    var withLabel = ed.tool === 'zone' || ed.tool === 'marker' || ed.tool === 'text';
+    els.labelLbl.hidden = els.label.hidden = !withLabel;
+    els.iconLbl.hidden = els.icon.hidden = ed.tool !== 'marker';
     var gate = '';
     if (!hasPlan()) gate = 'Создайте или выберите план.';
-    else if (allowedSquads().length === 0) gate = 'Вам не назначен отряд для рисования.';
+    else if (!ed.eraserOnly && allowedSquads().length === 0) gate = 'Вам не назначен отряд для рисования.';
     els.box.classList.toggle('disabled', gate !== '');
     els.gate.textContent = gate;
   }
@@ -97,11 +114,15 @@
   // The pencil owns the left button only while there is somewhere to draw; otherwise the map stays draggable.
   function syncMap() {
     if (!map || !running) return;
-    var pencil = ed.tool === 'pencil' && usable();
+    var can = usable();
+    var pencil = ed.tool === 'pencil' && can;
+    var vertex = ed.tool in VERTEX_TOOLS && can;
+    var point = (ed.tool === 'marker' || ed.tool === 'text') && can;
     var drag = !pencil || ed.spaceDown;
     if (drag) map.dragging.enable(); else map.dragging.disable();
-    if (pencil) map.doubleClickZoom.disable(); else if (dblZoomWas) map.doubleClickZoom.enable();
-    map.getContainer().classList.toggle('tac-pencil', pencil && !ed.spaceDown);
+    // double click finishes an arrow or zone, so it must not zoom meanwhile
+    if (pencil || vertex) map.doubleClickZoom.disable(); else if (dblZoomWas) map.doubleClickZoom.enable();
+    map.getContainer().classList.toggle('tac-pencil', (pencil || vertex || point) && !ed.spaceDown);
   }
 
   function setTool(tool) {
@@ -123,7 +144,9 @@
     ed.drawing = false;
     ed.points = [];
     ed.lastPx = null;
+    ed.verts = [];
     if (ed.temp) { ed.temp.remove(); ed.temp = null; }
+    if (ed.rubber) { ed.rubber.remove(); ed.rubber = null; }
   }
 
   function onDown(e) {
@@ -149,6 +172,17 @@
     if (ed.pan) {
       map.panBy([ed.pan.x - ev.clientX, ed.pan.y - ev.clientY], { animate: false });
       ed.pan = { x: ev.clientX, y: ev.clientY };
+      return;
+    }
+    if (ed.verts.length && ed.tool in VERTEX_TOOLS) {
+      var last = ed.verts[ed.verts.length - 1];
+      if (!ed.rubber) {
+        ed.rubber = L.polyline([last, e.latlng], {
+          color: color(), weight: 2, dashArray: '4 6', opacity: 0.7, interactive: false,
+        }).addTo(map);
+      } else {
+        ed.rubber.setLatLngs([last, e.latlng]);
+      }
       return;
     }
     if (!ed.drawing || !ed.temp) return;
@@ -210,6 +244,82 @@
     var ev = (e && e.originalEvent) || e || {};
     if (ev.button === 2 || ed.pan) ed.pan = null;
     if (ev.button === undefined || ev.button === 0) finishStroke();
+  }
+
+  // ---------- arrow, zone, marker, text ----------
+
+  function addVertex(latlng) {
+    var rule = VERTEX_TOOLS[ed.tool];
+    ed.verts.push(latlng);
+    if (!ed.temp) {
+      var style = { color: color(), weight: weight(), opacity: 0.9, interactive: false };
+      ed.temp = (ed.tool === 'zone' ? L.polygon : L.polyline)([latlng], style).addTo(map);
+    } else {
+      ed.temp.setLatLngs(ed.verts);
+    }
+    if (ed.verts.length >= rule.max) finishVertices();
+  }
+
+  function finishVertices() {
+    var rule = VERTEX_TOOLS[ed.tool];
+    if (!rule || !ed.verts.length) return;
+    if (ed.verts.length < rule.min) {
+      say(ed.tool === 'zone' ? 'Зоне нужно минимум 3 точки.' : 'Стрелке нужно минимум 2 точки.');
+      return;
+    }
+    var size = V.size();
+    var pid = T.planPublicId();
+    var temp = ed.temp;
+    var verts = ed.verts;
+    ed.verts = [];
+    ed.temp = null;
+    if (ed.rubber) { ed.rubber.remove(); ed.rubber = null; }
+    if (!size || !pid || !temp) { if (temp) temp.remove(); return; }
+    var pts = verts.map(function (ll) {
+      var p = Geo.fromLatLng(ll, size);
+      return [round5(p.x), round5(p.y)];
+    });
+    var body = { kind: ed.tool, geometry: pts, width: ed.width, squad: ed.squad };
+    var label = els.label.value.trim();
+    if (ed.tool === 'zone' && label) body.label = label;
+    send(body, temp, pid);
+  }
+
+  function placePoint(latlng) {
+    var size = V.size();
+    var pid = T.planPublicId();
+    if (!size || !pid) return;
+    var label = els.label.value.trim();
+    var p = Geo.fromLatLng(latlng, size);
+    var body = { kind: ed.tool, geometry: [round5(p.x), round5(p.y)], width: ed.width, squad: ed.squad };
+    if (ed.tool === 'text') {
+      if (!label) { say('Введите текст в поле «Подпись».'); els.label.focus(); return; }
+      body.label = label;
+    } else {
+      body.icon = els.icon.value;
+      if (label) body.label = label;
+    }
+    // A quick marker stands in until the server answers and the real layer arrives.
+    var temp = L.circleMarker(latlng, {
+      radius: 7, color: color(), fillColor: color(), fillOpacity: 0.5, interactive: false,
+    }).addTo(map);
+    send(body, temp, pid);
+  }
+
+  function onClick(e) {
+    if (!usable()) return;
+    if (ed.tool in VERTEX_TOOLS) addVertex(e.latlng);
+    else if (ed.tool === 'marker' || ed.tool === 'text') placePoint(e.latlng);
+  }
+
+  function onDblClick() {
+    if (!usable() || !(ed.tool in VERTEX_TOOLS) || !ed.verts.length) return;
+    // the two clicks of a double click each added a vertex in the same place: keep one
+    if (ed.verts.length >= 2) {
+      ed.verts.pop();
+      if (ed.temp) ed.temp.setLatLngs(ed.verts);
+    }
+    finishVertices();
   }
 
   // The stroke is already on the map (temp layer); the server answer replaces it with the real one.
@@ -312,19 +422,29 @@
   // ---------- keyboard ----------
 
   function onKeyDown(e) {
-    if (!running || V.mode() !== 'tactics') return;
+    if (!running || V.mode() !== 'tactics' || ed.eraserOnly) return;
     var tag = ((e.target && e.target.tagName) || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target && e.target.isContentEditable)) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.code === 'Space') {
-      if (!ed.spaceDown) { ed.spaceDown = true; cancelStroke(); syncMap(); }
+      if (!ed.spaceDown) { ed.spaceDown = true; if (ed.drawing) cancelStroke(); syncMap(); }
       e.preventDefault();
     } else if (e.key === 'Escape') {
-      if (ed.drawing) cancelStroke(); else if (ed.tool !== 'pencil') setTool('pencil');
+      if (ed.drawing || ed.verts.length) cancelStroke(); else if (ed.tool !== 'pencil') setTool('pencil');
     } else if (e.key === 'p' || e.key === 'P' || e.key === 'з' || e.key === 'З') {
       setTool('pencil');
+    } else if (e.key === 'Enter' && ed.verts.length) {
+      finishVertices();
     } else if (e.key === 'e' || e.key === 'E' || e.key === 'у' || e.key === 'У') {
       setTool('eraser');
+    } else if (e.key === 'a' || e.key === 'A' || e.key === 'ф' || e.key === 'Ф') {
+      setTool('arrow');
+    } else if (e.key === 'z' || e.key === 'Z' || e.key === 'я' || e.key === 'Я') {
+      setTool('zone');
+    } else if (e.key === 'm' || e.key === 'M' || e.key === 'ь' || e.key === 'Ь') {
+      setTool('marker');
+    } else if (e.key === 't' || e.key === 'T' || e.key === 'е' || e.key === 'Е') {
+      setTool('text');
     } else if (/^[1-9]$/.test(e.key)) {
       var s = allowedSquads()[Number(e.key) - 1];
       if (s) { ed.squad = s.id; els.squad.value = s.id === null ? '' : String(s.id); }
@@ -361,10 +481,11 @@
 
   // ---------- start / stop ----------
 
-  function start(viewer, tactics) {
+  function start(viewer, tactics, opts) {
     if (running) stop();
     V = viewer;
     T = tactics;
+    ed.eraserOnly = !!(opts && opts.eraserOnly);
     map = V.leaflet();
     if (!map || !buildPanel()) return;
     running = true;
@@ -375,6 +496,8 @@
     map.on('mousedown', onDown);
     map.on('mousemove', onMove);
     map.on('mouseup', onUp);
+    map.on('click', onClick);
+    map.on('dblclick', onDblClick);
     map.getContainer().addEventListener('contextmenu', onContext);
     window.addEventListener('mouseup', onWindowUp);
     window.addEventListener('blur', onBlur);
@@ -382,7 +505,7 @@
     document.addEventListener('keyup', onKeyUp);
     if (!changeHooked) { changeHooked = true; T.onChange(onTacticsChange); }
     fillSquads();
-    setTool('pencil');
+    setTool(ed.eraserOnly ? 'eraser' : 'pencil');
     onTacticsChange();
   }
 
@@ -396,6 +519,8 @@
     map.off('mousedown', onDown);
     map.off('mousemove', onMove);
     map.off('mouseup', onUp);
+    map.off('click', onClick);
+    map.off('dblclick', onDblClick);
     map.getContainer().removeEventListener('contextmenu', onContext);
     window.removeEventListener('mouseup', onWindowUp);
     window.removeEventListener('blur', onBlur);

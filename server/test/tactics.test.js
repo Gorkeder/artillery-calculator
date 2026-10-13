@@ -394,3 +394,45 @@ test('a squad commander cannot PATCH another squad or a shared item; the site ad
   assert.equal(body.items.length, 3);
   assert.equal(body.items.every((i) => i.width === inBravo.width), true, 'nothing changed');
 });
+
+test('every kind is stored with its label and icon and follows the squad rules', async (t) => {
+  const { as, pid, alpha, bravo } = await withSquads(t);
+  const post = (who, body) => as(who)('POST', `/api/plans/${pid}/items`, body);
+  const cases = [
+    { kind: 'arrow', geometry: PENCIL, squad: alpha },
+    { kind: 'zone', geometry: PENCIL, squad: alpha, label: 'Склад' },
+    { kind: 'marker', geometry: [0.4, 0.4], squad: alpha, icon: 'attack', label: 'Атака' },
+    { kind: 'text', geometry: [0.5, 0.5], squad: alpha, label: 'Держим мост' },
+  ];
+  for (const body of cases) {
+    const r = await post('bob', body);
+    assert.equal(r.status, 201, body.kind);
+    assert.equal(r.json.item.kind, body.kind);
+    assert.equal(r.json.item.label, body.label || null);
+    assert.equal(r.json.item.icon, body.icon || (body.kind === 'marker' ? 'question' : null));
+    assert.deepEqual(r.json.item.geometry, body.geometry);
+    assert.equal((await post('bob', { ...body, squad: bravo })).status, 403, body.kind + ' for a foreign squad');
+    assert.equal((await post('bob', { ...body, squad: null })).status, 403, body.kind + ' shared');
+  }
+  const body = (await as('alice')('GET', '/api/plans/' + pid)).json;
+  assert.deepEqual(body.items.map((i) => i.kind), ['arrow', 'zone', 'marker', 'text']);
+});
+
+test('PATCH edits label, icon and a point geometry of a marker; a bad label is 400', async (t) => {
+  const { as, pid, alpha } = await withSquads(t);
+  const m = (await as('bob')('POST', `/api/plans/${pid}/items`,
+    { kind: 'marker', geometry: [0.4, 0.4], squad: alpha, icon: 'attack' })).json.item;
+  const r = await as('bob')('PATCH', '/api/items/' + m.id, { label: 'Вперёд', icon: 'enemy', geometry: [0.6, 0.6] });
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.json.item.label, r.json.item.icon, r.json.item.geometry], ['Вперёд', 'enemy', [0.6, 0.6]]);
+  assert.equal((await as('bob')('PATCH', '/api/items/' + m.id, { icon: 'skull' })).status, 400);
+  assert.equal((await as('bob')('PATCH', '/api/items/' + m.id, { geometry: PENCIL })).status, 400);
+  assert.equal((await as('bob')('PATCH', '/api/items/' + m.id, { kind: 'text' })).status, 400);
+});
+
+test('a client-sent __kind is ignored on update', async (t) => {
+  const { as, pid, alpha } = await withSquads(t);
+  const p = (await as('bob')('POST', `/api/plans/${pid}/items`, { kind: 'pencil', geometry: PENCIL, squad: alpha })).json.item;
+  const r = await as('bob')('PATCH', '/api/items/' + p.id, { __kind: 'text', label: 'sneaky' });
+  assert.equal(r.status, 400, 'label is not allowed on a pencil');
+});

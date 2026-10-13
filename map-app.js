@@ -471,7 +471,7 @@
   var tacticsReq = 0;
 
   function enterTactics() {
-    if (!state.clan || state.mode === 'tactics') return;
+    if ((!state.clan && !state.tacticsAdmin) || state.mode === 'tactics') return;
     var req = ++tacticsReq;
     function stale() { return req !== tacticsReq || state.mode !== 'tactics'; }
     state.prevMode = state.mode;
@@ -484,7 +484,7 @@
     if (window.MapMarks) window.MapMarks.setSuspended(true);
     state.drawTool = false;
     loadTactics().then(function () {
-      if (stale()) return null;
+      if (stale() || state.tacticsAdmin) return null;
       // Squads, colours and permissions may have changed since the page opened.
       return api.get('/api/my/clan').then(function (body) {
         if (stale() || !body.clan) return;
@@ -493,22 +493,24 @@
     }).then(function () {
       if (stale()) return null;
       var c = state.clan;
-      if (!(c.me.isOwner || c.me.perms.indexOf('tactics_view') >= 0)) {
+      if (!state.tacticsAdmin && !(c.me.isOwner || c.me.perms.indexOf('tactics_view') >= 0)) {
         if ($('mob-tactics')) $('mob-tactics').hidden = true;
         notice('Доступ к тактике закрыт.');
         leaveTactics();
         return null;
       }
       var q = new URLSearchParams(location.search);
-      return window.MapTactics.start(window.MapViewer, state.clan, { plan: q.get('plan') });
+      return window.MapTactics.start(window.MapViewer, state.clan, { plan: q.get('plan'), admin: !!state.tacticsAdmin });
     }).then(function () {
       if (stale()) return null;
       if ($('mob-tactics')) $('mob-tactics').classList.add('on');
-      if (window.matchMedia('(min-width: 900px)').matches && window.MapTactics.canDraw()) {
+      // The site admin only erases: the editor starts in eraser-only mode, whatever clan they belong to.
+      var mayDraw = state.tacticsAdmin || window.MapTactics.canDraw();
+      if (window.matchMedia('(min-width: 900px)').matches && mayDraw) {
         return loadTacticsEditor().then(function () {
           if (stale()) return;
           // start() stops a running copy first, so a second call never double-binds.
-          window.MapTacticsEditor.start(window.MapViewer, window.MapTactics);
+          window.MapTacticsEditor.start(window.MapViewer, window.MapTactics, { eraserOnly: !!state.tacticsAdmin });
         });
       }
       return null;
@@ -677,7 +679,14 @@
     }
     // Clan tactics: the button shows for a member with tactics_view (the site admin has no clan here).
     var tacBtn = $('mob-tactics');
-    if (tacBtn && state.me.user && state.me.user.clan) {
+    if (tacBtn && state.me.user && state.me.user.role === 'admin') {
+      // The site admin opens any clan's tactics (read and erase), with or without a clan of their own.
+      tacBtn.hidden = false;
+      state.tacticsAdmin = true;
+      if (new URLSearchParams(location.search).get('tactics') === '1') {
+        if (state.ready) enterTactics(); else state.wantTactics = true;
+      }
+    } else if (tacBtn && state.me.user && state.me.user.clan) {
       api.get('/api/my/clan').then(function (body) {
         if (!body.clan) return;
         state.clan = body;
@@ -720,6 +729,7 @@
     document.body.addEventListener('tactics:closed', function () {
       // The module re-read /api/my/clan: keep our copy (and the button) in step with it.
       var c = window.MapTactics && window.MapTactics.clan();
+      if (state.tacticsAdmin) { leaveTactics(); return; }
       state.clan = c || null;
       if ($('mob-tactics') && (!c || !(c.me.isOwner || c.me.perms.indexOf('tactics_view') >= 0))) $('mob-tactics').hidden = true;
       leaveTactics();

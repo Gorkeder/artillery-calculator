@@ -36,3 +36,6 @@ button.danger { border-color: var(--danger); color: var(--danger); }
   .emblem { width: 56px; height: 56px; }
   .chip { white-space: normal; }
 }
+.admin-block { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--border, #2c2b25); }
+.admin-block .row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.admin-block .row input { flex: 1 1 140px; min-width: 0; }

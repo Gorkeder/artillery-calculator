@@ -10,7 +10,7 @@
   var V = null;
   var S = {
     on: false, clan: null, plans: [], plan: null, items: [], etag: null,
-    hiddenSquads: {}, onlyMine: false, updatedAt: 0, online: true,
+    hiddenSquads: {}, onlyMine: false, updatedAt: 0, online: true, admin: false, adminClans: [],
   };
   var layers = {};
   var group = null;
@@ -36,6 +36,49 @@
 
   // ---------- drawing layer ----------
 
+  // Own set: the category icons in map-icons.js feed the category editor and must not grow tactical ones.
+  var TACTIC_ICONS = {
+    gather: { label: 'Сбор', svg: '<circle cx="12" cy="12" r="3"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/>' },
+    attack: { label: 'Атака', svg: '<path d="M4 20 20 4M14 4h6v6"/>' },
+    defend: { label: 'Оборона', svg: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/>' },
+    enemy: { label: 'Враг', svg: '<circle cx="12" cy="12" r="9"/><path d="m8 8 8 8M16 8l-8 8"/>' },
+    artillery: { label: 'Артиллерия', svg: '<circle cx="8" cy="17" r="3"/><path d="M10 15 20 5M16 4l4 4"/>' },
+    sniper: { label: 'Снайпер', svg: '<circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/>' },
+    danger: { label: 'Опасность', svg: '<path d="M12 3l10 18H2z"/><path d="M12 10v5"/><circle cx="12" cy="18" r=".6"/>' },
+    question: { label: 'Вопрос', svg: '<circle cx="12" cy="12" r="10"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><circle cx="12" cy="17" r=".6"/>' },
+  };
+
+  function iconNode(id) {
+    var def = TACTIC_ICONS[id] || TACTIC_ICONS.question;
+    var wrap = document.createElement('span');
+    wrap.className = 'ico';
+    // def.svg is static markup from the table above, never user input
+    wrap.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+      'stroke-linecap="round" stroke-linejoin="round">' + def.svg + '</svg>';
+    return wrap;
+  }
+
+  function permanentLabel(layer, text, direction) {
+    if (!text) return;
+    // bindTooltip takes a string as HTML: pass a text node holder instead
+    layer.bindTooltip(h('span', null, text), { permanent: true, direction: direction, className: 'tac-label', offset: [0, direction === 'bottom' ? 4 : 0] });
+  }
+
+  // CRS.Simple is linear, so the screen angle of the last segment does not depend on the zoom.
+  function arrowHead(points, size, color, width) {
+    var a = Geo.toLatLng({ x: points[points.length - 2][0], y: points[points.length - 2][1] }, size);
+    var b = Geo.toLatLng({ x: points[points.length - 1][0], y: points[points.length - 1][1] }, size);
+    var deg = Math.atan2(-(b[0] - a[0]), b[1] - a[1]) * 180 / Math.PI;
+    var px = 14 + 3 * width;
+    var el = h('div', { class: 'tac-head', style: 'width:' + px + 'px;height:' + px + 'px;transform:rotate(' + deg + 'deg)' });
+    // static markup, color validated on the server as a squad color (#rrggbb) or the shared constant
+    el.innerHTML = '<svg viewBox="0 0 20 20"><path d="M1 2 19 10 1 18 5 10z" fill="' + color + '"/></svg>';
+    return L.marker(b, {
+      icon: L.divIcon({ html: el, className: 'tac-head-wrap', iconSize: [px, px], iconAnchor: [px / 2, px / 2] }),
+      interactive: interactive, keyboard: false,
+    });
+  }
+
   function visible(item) {
     var key = item.squad_id === null ? 'shared' : String(item.squad_id);
     if (S.hiddenSquads[key]) return false;
@@ -48,13 +91,44 @@
   function makeLayer(item) {
     var size = V.size();
     if (!size) return null;
-    // Stage 3 adds the other kinds here; an unknown kind from a newer server is skipped, not fatal.
-    if (item.kind !== 'pencil') return null;
-    var layer = L.polyline(Geo.pointsToLatLngs(item.geometry, size), {
-      color: colorOf(item), weight: weightOf(item.width), opacity: 0.9, lineCap: 'round', lineJoin: 'round',
-      interactive: interactive, bubblingMouseEvents: false,
-    });
-    layer.itemId = item.id;
+    var color = colorOf(item);
+    var weight = weightOf(item.width);
+    var layer = null;
+    if (item.kind === 'pencil') {
+      layer = L.polyline(Geo.pointsToLatLngs(item.geometry, size), {
+        color: color, weight: weight, opacity: 0.9, lineCap: 'round', lineJoin: 'round',
+        interactive: interactive, bubblingMouseEvents: false,
+      });
+    } else if (item.kind === 'arrow') {
+      var line = L.polyline(Geo.pointsToLatLngs(item.geometry, size), {
+        color: color, weight: weight, opacity: 0.95, lineCap: 'round', lineJoin: 'round',
+        dashArray: '8 6', interactive: interactive, bubblingMouseEvents: false,
+      });
+      layer = L.featureGroup([line, arrowHead(item.geometry, size, color, item.width)]);
+    } else if (item.kind === 'zone') {
+      layer = L.polygon(Geo.pointsToLatLngs(item.geometry, size), {
+        color: color, fillColor: color, fillOpacity: 0.2, weight: Math.max(2, weight - 1),
+        interactive: interactive, bubblingMouseEvents: false,
+      });
+      permanentLabel(layer, item.label, 'center');
+    } else if (item.kind === 'marker') {
+      var mk = h('div', { class: 'mk tac-mk' }, iconNode(item.icon));
+      mk.style.setProperty('--c', color);
+      layer = L.marker(Geo.toLatLng({ x: item.geometry[0], y: item.geometry[1] }, size), {
+        icon: L.divIcon({ html: mk, className: 'mk-wrap', iconSize: [30, 30], iconAnchor: [15, 15] }),
+        interactive: interactive, keyboard: false,
+      });
+      permanentLabel(layer, item.label, 'bottom');
+    } else if (item.kind === 'text') {
+      var txt = h('div', { class: 'tac-text' }, item.label || '');
+      txt.style.color = color;
+      layer = L.marker(Geo.toLatLng({ x: item.geometry[0], y: item.geometry[1] }, size), {
+        icon: L.divIcon({ html: txt, className: 'tac-text-wrap', iconSize: null }),
+        interactive: interactive, keyboard: false,
+      });
+    }
+    // An unknown kind from a newer server is skipped, not fatal.
+    if (layer) layer.itemId = item.id;
     return layer;
   }
 
@@ -145,6 +219,16 @@
   }
 
   function reloadClan() {
+    if (S.admin) {
+      // The admin has no clan of their own here: re-read the clan that is open.
+      if (!S.clan) return Promise.resolve();
+      return api.get('/api/admin/clans/' + S.clan.clan.id).then(function (d) {
+        S.clan = adminBody(d, S.clan.me.id);
+        S.online = true;
+      }, function (err) {
+        if (err.status === 404) { S.clan = null; S.online = true; } else S.online = false;
+      });
+    }
     return api.get('/api/my/clan').then(function (body) {
       S.clan = body.clan ? body : null;
       S.online = true;
@@ -156,7 +240,7 @@
 
   function loadPlans(wantedPlan) {
     var map = V.state().map;
-    if (!map || !map.published) {
+    if (!map || !map.published || !S.clan) {
       S.plans = [];
       S.plan = null;
       S.items = [];
@@ -220,9 +304,10 @@
     els.rename = h('button', { type: 'button', hidden: true, onclick: renamePlan }, 'Переименовать');
     els.activate = h('button', { type: 'button', hidden: true, onclick: activatePlan }, 'Сделать активным');
     els.del = h('button', { type: 'button', class: 'danger', hidden: true, onclick: deletePlan }, 'Удалить');
+    els.clanSel = h('select', { 'aria-label': 'Клан', hidden: true, onchange: function () { pickClan(Number(els.clanSel.value)); } });
     els.panel = h('aside', { id: 'tac-panel', class: 'tac-panel', hidden: true },
       h('div', { class: 'tac-head' }, h('strong', null, 'Тактика'), h('span', { class: 'grow' }), els.state),
-      els.title, els.empty,
+      els.clanSel, els.title, els.empty,
       h('div', { class: 'tac-plan-btns' }, els.create, els.rename, els.activate, els.del),
       els.squads,
       h('div', { id: 'tac-tools-slot' }));
@@ -247,11 +332,11 @@
     });
     els.title.hidden = S.plans.length === 0;
     els.empty.hidden = S.plans.length !== 0;
-    var manage = hasPerm('plans_manage');
+    var manage = !S.admin && hasPerm('plans_manage');
     els.create.hidden = !manage;
     els.rename.hidden = !manage || !S.plan;
     els.activate.hidden = !manage || !S.plan || S.plan.active;
-    els.del.hidden = !manage || !S.plan;
+    els.del.hidden = !(manage || S.admin) || !S.plan;
     renderSquadFilter();
     updateState();
   }
@@ -308,11 +393,53 @@
     V.notice(text || (err.status === 429 ? 'Слишком часто, подождите минуту.' : 'Ошибка: ' + err.message));
   }
 
+  // ---------- site admin: any clan, read and erase only ----------
+
+  function adminBody(detail, adminId) {
+    return {
+      clan: detail.clan,
+      me: { id: adminId, isOwner: false, perms: ['tactics_view'], drawSquads: [] },
+      roles: [], squads: detail.squads, members: [],
+    };
+  }
+
+  function pickClan(clanId, wantedPlan) {
+    return api.get('/api/admin/clans/' + clanId).then(function (detail) {
+      if (!S.on) return null;
+      S.clan = adminBody(detail, V.state().me.user.id);
+      els.clanSel.value = String(clanId);
+      return loadPlans(wantedPlan);
+    }, function () { V.notice('Не удалось открыть клан.'); });
+  }
+
+  // The clan list comes from the admin API; a ?plan= link names its clan through the plan itself.
+  function startAdmin(opts) {
+    return api.get('/api/admin/clans').then(function (clans) {
+      if (!S.on) return null;
+      S.adminClans = clans;
+      els.clanSel.textContent = '';
+      clans.forEach(function (c) {
+        els.clanSel.appendChild(h('option', { value: String(c.id) }, '[' + c.tag + '] ' + c.name));
+      });
+      els.clanSel.hidden = clans.length === 0;
+      if (!clans.length) { S.clan = null; updatePanel(); return null; }
+      var wanted = opts && opts.plan;
+      var first = wanted
+        ? api.get('/api/plans/' + encodeURIComponent(wanted)).then(function (b) { return b.plan.clan_id; }, function () { return clans[0].id; })
+        : Promise.resolve(clans[0].id);
+      return first.then(function (clanId) {
+        if (!clans.some(function (c) { return c.id === clanId; })) clanId = clans[0].id;
+        return pickClan(clanId, wanted);
+      });
+    });
+  }
+
   // ---------- start / stop ----------
 
   function start(viewer, clanBody, opts) {
     V = viewer;
-    S.clan = clanBody;
+    S.admin = !!(opts && opts.admin);
+    S.clan = S.admin ? null : clanBody;
     S.on = true;
     S.plans = [];
     S.plan = null;
@@ -331,8 +458,10 @@
     clearInterval(clock);
     timer = setInterval(poll, POLL_MS);
     clock = setInterval(updateState, 1000);
+    els.clanSel.hidden = true;
     updatePanel();
-    return loadPlans(opts && opts.plan).then(updateUrl);
+    var ready = S.admin ? startAdmin(opts) : loadPlans(opts && opts.plan);
+    return ready.then(updateUrl);
   }
 
   function stop(silent) {
@@ -376,11 +505,14 @@
     plan: function () { return S.plan; },
     clan: function () { return S.clan; },
     planPublicId: function () { return S.plan ? S.plan.id : null; },
-    canDraw: function () { return hasPerm('tactics_draw'); },
+    canDraw: function () { return !S.admin && hasPerm('tactics_draw'); },
+    isAdmin: function () { return S.admin; },
     canManage: function () { return hasPerm('plans_manage'); },
     squads: function () { return S.clan ? S.clan.squads : []; },
     drawSquads: function () { return S.clan ? S.clan.me.drawSquads : []; },
     colorOf: colorOf,
+    TACTIC_ICONS: TACTIC_ICONS,
+    iconNode: iconNode,
     layers: function () { return layers; },
     itemById: function (id) { return S.items.find(function (x) { return x.id === id; }) || null; },
     setInteractive: setInteractive,
