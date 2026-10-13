@@ -181,3 +181,15 @@ test('the site admin reads any clan plans but cannot create or change them', asy
   assert.equal((await as('admin')('PATCH', '/api/plans/' + pid, { title: 'X' })).status, 403);
   assert.equal((await as('admin')('POST', `/api/plans/${pid}/activate`)).status, 403);
 });
+
+test('If-None-Match accepts weak validators and lists; an unpublished map slug is 404 in the list', async (t) => {
+  const { as, base, mapId } = await tacticSetup(t);
+  const plan = (await as('alice')('POST', base + '/plans', { mapId, title: 'A' })).json.plan;
+  const etag = `"v${plan.version}"`;
+  const get = (inm) => as('bob')('GET', '/api/plans/' + plan.id, undefined, { headers: { 'if-none-match': inm } });
+  assert.equal((await get('W/' + etag)).status, 304);
+  assert.equal((await get(`"v0", ${etag}`)).status, 304);
+  assert.equal((await get('*')).status, 304);
+  assert.equal((await get('"v0", W/"v99"')).status, 200);
+  assert.equal((await as('bob')('GET', base + '/plans?map=draft')).status, 404);
+});

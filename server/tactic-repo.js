@@ -71,6 +71,14 @@ function insertPlan(db, { clanId, mapId, title, userId, active }) {
   });
 }
 
+// The title change and the version bump are one transaction.
+function rename(db, plan, title, userId) {
+  return tx(db, () => {
+    db.prepare('UPDATE tactic_plans SET title = ? WHERE id = ?').run(title, plan.id);
+    return bump(db, plan.id, userId);
+  });
+}
+
 function activate(db, plan, userId) {
   return tx(db, () => {
     db.prepare('UPDATE tactic_plans SET is_active = 0 WHERE clan_id = ? AND map_id = ? AND id != ?')
@@ -146,6 +154,7 @@ module.exports = {
   countItems,
   bump,
   insertPlan,
+  rename,
   activate,
   getItem,
   insertItem,

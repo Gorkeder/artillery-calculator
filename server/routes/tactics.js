@@ -45,6 +45,15 @@ function planForManage(c) {
 
 const bodyOf = (c, plan) => tactics.planBody(c.db, plan);
 
+// If-None-Match may carry a list, weak validators (W/ added by a gzip proxy) or *.
+function etagMatches(header, etag) {
+  if (typeof header !== 'string') return false;
+  return header.split(',').some((p) => {
+    const v = p.trim().replace(/^W\//, '');
+    return v === '*' || v === etag;
+  });
+}
+
 function publishedMap(c, mapId) {
   const row = Number.isInteger(mapId) ? c.db.prepare('SELECT * FROM maps WHERE id = ?').get(mapId) : null;
   if (!row || !row.published) throw new HttpError(404, 'map not found');
@@ -66,7 +75,7 @@ module.exports = [
       const slug = c.query.get('map');
       if (slug) {
         const map = repo.getMapBySlug(c.db, slug);
-        if (!map) throw new HttpError(404, 'map not found');
+        if (!map || !map.published) throw new HttpError(404, 'map not found');
         mapId = map.id;
       }
       return { body: tactics.listPlans(c.db, clanId, mapId) };
@@ -100,7 +109,7 @@ module.exports = [
       const { plan } = planFor(c);
       const etag = `"v${plan.version}"`;
       c.headers.ETag = etag;
-      if (c.req.headers['if-none-match'] === etag) return { status: 304, body: null };
+      if (etagMatches(c.req.headers['if-none-match'], etag)) return { status: 304, body: null };
       return { body: bodyOf(c, plan) };
     },
   },
@@ -113,8 +122,7 @@ module.exports = [
       const fields = checked(validatePlan(await readJson(c.req)));
       if (!Object.keys(fields).length) throw new HttpError(400, 'nothing to update');
       const { plan } = planForManage(c); // re-read after the await
-      c.db.prepare('UPDATE tactic_plans SET title = ? WHERE id = ?').run(fields.title, plan.id);
-      tactics.bump(c.db, plan.id, c.user.id);
+      tactics.rename(c.db, plan, fields.title, c.user.id);
       return { body: bodyOf(c, tactics.getPlanByPublicId(c.db, plan.public_id)) };
     },
   },
