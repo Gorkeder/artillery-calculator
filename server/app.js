@@ -11,6 +11,7 @@ const ROUTE_MODULES = [
   require('./routes/images'),
   require('./routes/marks'),
   require('./routes/moderation'),
+  require('./routes/clan-invites'),
   require('./routes/clans'),
   require('./routes/clan-roles'),
 ];
