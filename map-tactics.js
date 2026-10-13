@@ -108,23 +108,31 @@
       S.online = true;
       S.updatedAt = Date.now();
       if (r.status === 200) applyPlanBody(r.data, r.etag);
-      else updatePanel();
+      else updateState();
     }, function (err) {
       if (err.status === 404 || err.status === 403) {
         // The plan was deleted, or the member lost access: re-read what the clan still offers.
         return reloadClan().then(function () {
-          if (!S.clan || !hasPerm('tactics_view')) return lostAccess('Доступ к тактике закрыт.');
+          if (!S.on) return null;
+          if (!S.online) { updateState(); return null; }
+          if (!S.clan || !hasPerm('tactics_view')) return lostAccess('Доступ к тактике закрыт или план удалён');
           V.notice('План удалён.');
-          return loadPlans();
+          return loadPlans().catch(function () { /* the next poll retries */ });
         });
       }
       S.online = false;
-      updatePanel();
+      updateState();
     });
   }
 
   function reloadClan() {
-    return api.get('/api/my/clan').then(function (body) { S.clan = body.clan ? body : null; }, function () { S.clan = null; });
+    return api.get('/api/my/clan').then(function (body) {
+      S.clan = body.clan ? body : null;
+      S.online = true;
+    }, function (err) {
+      // Only an explicit refusal means the access is gone; a network or server error keeps the clan as it was.
+      if (err.status === 401 || err.status === 403 || err.status === 404) { S.clan = null; S.online = true; } else S.online = false;
+    });
   }
 
   function loadPlans(wantedPlan) {
@@ -282,6 +290,11 @@
     V = viewer;
     S.clan = clanBody;
     S.on = true;
+    S.plans = [];
+    S.plan = null;
+    S.items = [];
+    S.etag = null;
+    S.online = true;
     S.hiddenSquads = {};
     S.onlyMine = false;
     document.body.classList.add('tactics');
@@ -333,6 +346,8 @@
   window.MapTactics = {
     start: start,
     stop: stop,
+    available: function () { var m = V && V.state().map; return !!(m && m.published && S.clan); },
+    state: function () { return S; },
     active: function () { return S.on; },
     plan: function () { return S.plan; },
     clan: function () { return S.clan; },

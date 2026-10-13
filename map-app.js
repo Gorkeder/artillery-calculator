@@ -451,7 +451,9 @@
   var tacticsReady = null;
 
   function loadTactics() {
-    if (!tacticsReady) tacticsReady = loadScript('/map-tactics.js');
+    if (!tacticsReady) {
+      tacticsReady = loadScript('/map-tactics.js').catch(function (e) { tacticsReady = null; throw e; });
+    }
     return tacticsReady;
   }
 
@@ -467,14 +469,19 @@
     if (window.MapMarks) window.MapMarks.setSuspended(true);
     state.drawTool = false;
     loadTactics().then(function () {
+      if (state.mode !== 'tactics') return null;
       var q = new URLSearchParams(location.search);
       return window.MapTactics.start(window.MapViewer, state.clan, { plan: q.get('plan') });
     }).then(function () {
+      if (state.mode !== 'tactics') return null;
       if ($('mob-tactics')) $('mob-tactics').classList.add('on');
       if (window.matchMedia('(min-width: 900px)').matches && window.MapTactics.canDraw()) {
         return loadScript('/map-tactics-editor.js').then(function () { window.MapTacticsEditor.start(window.MapViewer, window.MapTactics); });
       }
       return null;
+    }).then(function () {
+      // Left (or closed by the server) while the editor script was loading: make sure it did not start.
+      if (state.mode !== 'tactics' && window.MapTacticsEditor) window.MapTacticsEditor.stop();
     }).catch(function () { notice('Не удалось открыть тактику.'); leaveTactics(); });
   }
 
@@ -668,9 +675,19 @@
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeCard(); });
     $('map-select').addEventListener('change', function (e) { loadMap(e.target.value); });
     if ($('mob-tactics')) {
-      $('mob-tactics').addEventListener('click', function () { if (state.mode === 'tactics') leaveTactics(); else enterTactics(); });
+      $('mob-tactics').addEventListener('click', function () {
+        if (state.mode === 'tactics') leaveTactics();
+        else if (state.ready) enterTactics();
+        else state.wantTactics = true; // entered once init has finished
+      });
     }
-    document.body.addEventListener('tactics:closed', leaveTactics);
+    document.body.addEventListener('tactics:closed', function () {
+      // The module re-read /api/my/clan: keep our copy (and the button) in step with it.
+      var c = window.MapTactics && window.MapTactics.clan();
+      state.clan = c || null;
+      if ($('mob-tactics') && (!c || !(c.me.isOwner || c.me.perms.indexOf('tactics_view') >= 0))) $('mob-tactics').hidden = true;
+      leaveTactics();
+    });
     setupSearch();
 
     return api.get('/api/me')
