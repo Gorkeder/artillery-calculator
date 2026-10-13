@@ -11,6 +11,7 @@ const ROUTE_MODULES = [
   require('./routes/images'),
   require('./routes/marks'),
   require('./routes/moderation'),
+  require('./routes/clans'),
 ];
 
 function compile(pattern) {
@@ -43,6 +44,7 @@ function createApp(opts) {
     mailEmail: createRateLimiter({ max: 3, windowMs: HOUR }),
     marksWrite: createRateLimiter({ max: 120, windowMs: 10 * MIN }),
     proposalsWrite: createRateLimiter({ max: 60, windowMs: 10 * MIN }),
+    clansWrite: createRateLimiter({ max: 120, windowMs: 10 * MIN }),
     ...(opts.limiters || {}),
   };
   const routes = ROUTE_MODULES.flat().map((r) => ({ ...r, ...compile(r.pattern) }));

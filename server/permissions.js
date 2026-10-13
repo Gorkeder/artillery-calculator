@@ -16,6 +16,7 @@ const ACTIONS = new Set([
   'feature:withdraw',
   'moderation:read',
   'moderation:write',
+  'clan:create',
 ]);
 
 // The only place that decides who may do what. Direct publishing, maps, categories and photos: admins only.
@@ -45,6 +46,9 @@ function can(user, action, resource) {
         && resource.status === 'pending' && !resource.reject_reason && Boolean(resource.submitted_at);
     case 'feature:delete':
       return admin || (Boolean(resource) && resource.author_id === user.id && resource.status === 'pending');
+    case 'clan:create':
+      // The route passes what it read from the users row: e-mail state and the admin's clan block.
+      return Boolean(resource) && resource.emailVerified === true && !resource.clansBlocked;
     default:
       return admin;
   }
