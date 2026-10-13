@@ -14,6 +14,7 @@ const ROUTE_MODULES = [
   require('./routes/clan-invites'),
   require('./routes/clans'),
   require('./routes/clan-roles'),
+  require('./routes/tactics'),
 ];
 
 function compile(pattern) {
@@ -47,6 +48,7 @@ function createApp(opts) {
     marksWrite: createRateLimiter({ max: 120, windowMs: 10 * MIN }),
     proposalsWrite: createRateLimiter({ max: 60, windowMs: 10 * MIN }),
     clansWrite: createRateLimiter({ max: 120, windowMs: 10 * MIN }),
+    tacticsWrite: createRateLimiter({ max: 60, windowMs: MIN }),
     ...(opts.limiters || {}),
   };
   const routes = ROUTE_MODULES.flat().map((r) => ({ ...r, ...compile(r.pattern) }));
