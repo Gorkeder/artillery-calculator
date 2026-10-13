@@ -44,3 +44,23 @@ test('featureStyle uses 0.25 fill opacity by default and honours explicit values
   assert.equal(Geo.featureStyle({ color: null, opacity: 0 }, cat).fillOpacity, 0);
   assert.equal(Geo.featureStyle({ color: null, opacity: 0.7 }, cat).fillOpacity, 0.7);
 });
+
+test('simplify keeps the ends and drops points on a straight line', () => {
+  const line = Array.from({ length: 11 }, (_, i) => [i / 10, 0.5]);
+  assert.deepEqual(Geo.simplify(line, 0.001), [[0, 0.5], [1, 0.5]]);
+});
+
+test('simplify keeps a real corner and never returns fewer than 2 points', () => {
+  const corner = [[0, 0], [0.5, 0.5], [1, 0]];
+  assert.deepEqual(Geo.simplify(corner, 0.01), corner);
+  assert.deepEqual(Geo.simplify([[0.1, 0.1], [0.1, 0.1], [0.1, 0.1]], 0.01).length, 2);
+  assert.deepEqual(Geo.simplify([[0.3, 0.3]], 0.01), [[0.3, 0.3]]);
+});
+
+test('simplify shrinks a dense wiggly stroke below the server limit', () => {
+  const stroke = Array.from({ length: 5000 }, (_, i) => [i / 5000, 0.5 + 0.001 * Math.sin(i / 3)]);
+  const out = Geo.simplify(stroke, 0.0005);
+  assert.ok(out.length < 2000 && out.length >= 2);
+  assert.deepEqual(out[0], stroke[0]);
+  assert.deepEqual(out[out.length - 1], stroke[stroke.length - 1]);
+});

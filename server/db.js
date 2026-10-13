@@ -217,6 +217,42 @@ CREATE TABLE clan_invitations (
 CREATE INDEX idx_clan_invitations_user ON clan_invitations(user_id);
 `,
   },
+  {
+    // Tactics: plans per clan and map, drawings per plan (stage 2 of clans and tactics).
+    // `version` grows on every change so pollers can use ETag/304. The partial unique index keeps
+    // one active plan per clan and map.
+    version: 7,
+    sql: `
+CREATE TABLE tactic_plans (
+  id INTEGER PRIMARY KEY,
+  public_id TEXT NOT NULL UNIQUE,
+  clan_id INTEGER NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+  map_id INTEGER NOT NULL REFERENCES maps(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 0,
+  version INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_tactic_plans_clan ON tactic_plans(clan_id, map_id);
+CREATE UNIQUE INDEX idx_tactic_plans_active ON tactic_plans(clan_id, map_id) WHERE is_active = 1;
+CREATE TABLE tactic_items (
+  id INTEGER PRIMARY KEY,
+  plan_id INTEGER NOT NULL REFERENCES tactic_plans(id) ON DELETE CASCADE,
+  squad_id INTEGER REFERENCES clan_squads(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('pencil', 'arrow', 'zone', 'marker', 'text')),
+  geometry TEXT NOT NULL,
+  width INTEGER NOT NULL DEFAULT 2 CHECK (width BETWEEN 1 AND 3),
+  icon TEXT,
+  label TEXT,
+  author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_tactic_items_plan ON tactic_items(plan_id);
+CREATE INDEX idx_tactic_items_squad ON tactic_items(squad_id);
+`,
+  },
 ];
 
 function migrate(db) {

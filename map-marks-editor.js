@@ -333,5 +333,8 @@
     status('Мои метки: видны только вам', '');
   }
 
-  window.MapMarksEditor = { start: start };
+  // Tactics mode: stop drawing and vertex editing without tearing the editor down.
+  function pause() { setTool('select'); deselect(); }
+
+  window.MapMarksEditor = { start: start, pause: pause };
 })();
