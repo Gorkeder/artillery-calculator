@@ -21,7 +21,10 @@ function newPublicId() {
   return out;
 }
 
+const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
 function validatePlan(input, { create = false } = {}) {
+  if (!isObject(input)) return fail('body_invalid');
   const out = {};
   if (create || 'title' in input) {
     if (typeof input.title !== 'string' || CONTROL_RE.test(input.title)) return fail('title_invalid');
@@ -51,6 +54,7 @@ const KINDS = {
 };
 
 function validateItem(input, { create = false } = {}) {
+  if (!isObject(input)) return fail('body_invalid');
   const out = {};
   if (create) {
     if (typeof input.kind !== 'string' || !Object.prototype.hasOwnProperty.call(KINDS, input.kind)) {
@@ -63,6 +67,7 @@ function validateItem(input, { create = false } = {}) {
   if (create || 'geometry' in input) {
     // On update the kind is not in the body; the route re-validates geometry with the stored kind.
     const kind = create ? out.kind : (input.__kind || 'pencil');
+    if (typeof kind !== 'string' || !Object.prototype.hasOwnProperty.call(KINDS, kind)) return fail('kind_invalid');
     const g = KINDS[kind](input.geometry);
     if (g === null) return fail('geometry_invalid');
     out.geometry = g;

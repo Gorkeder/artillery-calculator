@@ -66,3 +66,19 @@ test('newPublicId is 12 base62 characters and different each time', () => {
   assert.match(a, /^[0-9A-Za-z]{12}$/);
   assert.notEqual(a, newPublicId());
 });
+
+test('update with a hostile __kind is rejected without throwing', () => {
+  for (const __kind of ['constructor', 'toString', 'arrow', '__proto__', 5, {}]) {
+    const r = validateItem({ geometry: line, __kind }, {});
+    assert.equal(r.ok, false, String(__kind));
+  }
+  assert.equal(validateItem({ geometry: line, __kind: 'pencil' }, {}).ok, true);
+});
+
+test('non-object input is rejected without throwing', () => {
+  for (const input of [null, undefined, 'abc', 5, [], [1]]) {
+    assert.equal(validateItem(input, { create: true }).ok, false);
+    assert.equal(validateItem(input, {}).ok, false);
+    assert.equal(validatePlan(input, { create: true }).ok, false);
+  }
+});
