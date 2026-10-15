@@ -97,8 +97,9 @@
       if (!box.isConnected) { if (!box.__tries || box.__tries++ < 20) { box.__tries = box.__tries || 1; requestAnimationFrame(check); } return; }
       var w = box.clientWidth;
       if (w && inner.scrollWidth > w) {
-        box.style.setProperty('--mq-w', w + 'px');
-        box.style.setProperty('--mq-t', Math.max(8, Math.round((inner.scrollWidth + w) / 40)) + 's');
+        var over = inner.scrollWidth - w;
+        box.style.setProperty('--mq-d', -over + 'px');
+        box.style.setProperty('--mq-t', Math.max(6, Math.round(over / 30) + 4) + 's');
         box.classList.add('run');
       }
     });

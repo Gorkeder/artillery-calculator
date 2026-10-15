@@ -38,7 +38,7 @@ button.danger { border-color: var(--danger); color: var(--danger); }
 .mq-in { display: inline-block; }
 .mq-row .mq { flex: 1; }
 .mq.run .mq-in { animation: mq-scroll var(--mq-t, 12s) linear infinite; }
-@keyframes mq-scroll { from { transform: translateX(var(--mq-w, 100%)); } to { transform: translateX(-100%); } }
+@keyframes mq-scroll { 0%, 20% { transform: translateX(0); } 80%, 100% { transform: translateX(var(--mq-d, 0)); } }
 @media (prefers-reduced-motion: reduce) { .mq.run .mq-in { animation: none; } .mq { white-space: normal; } }
 @media (max-width: 560px) {
   .emblem { width: 56px; height: 56px; }
