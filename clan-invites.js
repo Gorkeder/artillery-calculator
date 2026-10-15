@@ -96,7 +96,7 @@
 
     if (C.can('clan_settings')) {
       var tag = C.field('Тег', { type: 'text', maxLength: 5, value: d.clan.tag, required: true });
-      var name = C.field('Название', { type: 'text', maxLength: 40, value: d.clan.name, required: true });
+      var name = C.field('Название', { type: 'text', maxLength: 100, value: d.clan.name, required: true });
       var desc = h('textarea', { maxLength: 500, rows: 4, value: d.clan.description });
       var form = h('form', null, tag.el, name.el, h('label', null, 'Описание', desc), h('button', { type: 'submit', class: 'primary' }, 'Сохранить'));
       C.bind(form, err, function () {

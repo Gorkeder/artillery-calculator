@@ -31,11 +31,21 @@ input[type=color] { width: 44px; height: 34px; padding: 0; margin-top: 4px; bord
 .copy input { flex: 1; min-width: 0; }
 button.small { padding: 4px 10px; font-size: 14px; }
 button.danger { border-color: var(--danger); color: var(--danger); }
-.list, .desc, .clan-head h1, .chip { overflow-wrap: anywhere; }
+.list, .desc, .chip { overflow-wrap: anywhere; }
+.mq-row { display: flex; align-items: baseline; gap: 0.3em; min-width: 0; }
+.mq-row .tag { flex: none; }
+.mq { display: inline-block; min-width: 0; overflow: hidden; white-space: nowrap; vertical-align: bottom; }
+.mq-in { display: inline-block; }
+.mq-row .mq { flex: 1; }
+.mq.run .mq-in { animation: mq-scroll var(--mq-t, 12s) linear infinite; }
+@keyframes mq-scroll { from { transform: translateX(var(--mq-w, 100%)); } to { transform: translateX(-100%); } }
+@media (prefers-reduced-motion: reduce) { .mq.run .mq-in { animation: none; } .mq { white-space: normal; } }
 @media (max-width: 560px) {
   .emblem { width: 56px; height: 56px; }
   .chip { white-space: normal; }
 }
+.list li a.grow { display: flex; gap: 0.3em; min-width: 0; flex: 1; }
+.list li a.grow .mq { flex: 1; }
 .admin-block { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--border, #2c2b25); }
 .admin-block .row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .admin-block .row input { flex: 1 1 140px; min-width: 0; }

@@ -27,7 +27,7 @@ function validateClan(input, { create = false } = {}) {
     out.tag = input.tag.trim();
   }
   if (create || 'name' in input) {
-    const name = shortText(input.name, 3, 40);
+    const name = shortText(input.name, 3, 100);
     if (name === null) return fail('name_invalid');
     out.name = name;
   }

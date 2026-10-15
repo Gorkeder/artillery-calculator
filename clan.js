@@ -89,8 +89,24 @@
     return h('a', { href: '/account?next=' + encodeURIComponent(location.pathname) }, 'Войдите');
   }
 
+  // Name that scrolls right-to-left when it does not fit its box.
+  function marquee(text) {
+    var inner = h('span', { class: 'mq-in' }, text);
+    var box = h('span', { class: 'mq' }, inner);
+    requestAnimationFrame(function check() {
+      if (!box.isConnected) { if (!box.__tries || box.__tries++ < 20) { box.__tries = box.__tries || 1; requestAnimationFrame(check); } return; }
+      var w = box.clientWidth;
+      if (w && inner.scrollWidth > w) {
+        box.style.setProperty('--mq-w', w + 'px');
+        box.style.setProperty('--mq-t', Math.max(8, Math.round((inner.scrollWidth + w) / 40)) + 's');
+        box.classList.add('run');
+      }
+    });
+    return box;
+  }
+
   function title(clan) {
-    return h('h1', null, h('span', { class: 'tag' }, '[' + clan.tag + '] '), clan.name);
+    return h('h1', { class: 'mq-row' }, h('span', { class: 'tag' }, '[' + clan.tag + '] '), marquee(clan.name));
   }
 
   var Clan = window.Clan = {
@@ -130,7 +146,7 @@
         if (!rows.length) list.appendChild(h('li', { class: 'muted' }, 'Ничего не найдено.'));
         rows.forEach(function (r) {
           list.appendChild(h('li', null, emblem(r, true),
-            h('a', { class: 'grow', href: '/clans/' + encodeURIComponent(r.tag) }, h('span', { class: 'tag' }, '[' + r.tag + '] '), r.name),
+            h('a', { class: 'grow', href: '/clans/' + encodeURIComponent(r.tag) }, h('span', { class: 'tag' }, '[' + r.tag + '] '), marquee(r.name)),
             h('span', { class: 'muted' }, r.members + ' уч.')));
         });
       }).catch(function () {
@@ -147,7 +163,7 @@
   function adminBlock(d) {
     var err = h('p', { class: 'err', role: 'alert' });
     var tag = h('input', { type: 'text', value: d.clan.tag, maxLength: 5, 'aria-label': 'Тег' });
-    var name = h('input', { type: 'text', value: d.clan.name, maxLength: 40, 'aria-label': 'Название' });
+    var name = h('input', { type: 'text', value: d.clan.name, maxLength: 100, 'aria-label': 'Название' });
     var save = h('button', { type: 'button', class: 'primary' }, 'Сохранить');
     var resetDesc = h('button', { type: 'button' }, 'Сбросить описание');
     var resetEmblem = h('button', { type: 'button' }, 'Сбросить эмблему');
@@ -285,7 +301,7 @@
         yes, no, err);
     }));
     var tag = field('Тег (2–5 букв или цифр)', { type: 'text', maxLength: 5, required: true });
-    var name = field('Название', { type: 'text', maxLength: 40, required: true });
+    var name = field('Название', { type: 'text', maxLength: 100, required: true });
     var desc = h('textarea', { maxLength: 500, rows: 3 });
     var err = h('p', { class: 'err', role: 'alert' });
     var form = h('form', null, tag.el, name.el, h('label', null, 'Описание (необязательно)', desc), err,

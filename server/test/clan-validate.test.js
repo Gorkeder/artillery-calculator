@@ -16,7 +16,7 @@ test('validateClan', () => {
     assert.equal(v.validateClan({ tag, name: 'Name' }, { create: true }).error, 'tag_invalid', String(tag));
   }
   assert.equal(v.validateClan({ tag: 'AB', name: 'ab' }, { create: true }).error, 'name_invalid');
-  assert.equal(v.validateClan({ tag: 'AB', name: 'x'.repeat(41) }, { create: true }).error, 'name_invalid');
+  assert.equal(v.validateClan({ tag: 'AB', name: 'x'.repeat(101) }, { create: true }).error, 'name_invalid');
   assert.equal(v.validateClan({ tag: 'AB', name: 'bad\nname' }, { create: true }).error, 'name_invalid');
   assert.equal(v.validateClan({ description: 'x'.repeat(501) }).error, 'description_invalid');
   assert.deepEqual(v.validateClan({ owner_id: 3 }), { ok: true, value: {} }, 'unknown fields are dropped');
