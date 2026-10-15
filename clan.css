@@ -49,3 +49,6 @@ button.danger { border-color: var(--danger); color: var(--danger); }
 .admin-block { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--border, #2c2b25); }
 .admin-block .row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .admin-block .row input { flex: 1 1 140px; min-width: 0; }
+
+.notice { margin: 8px 0 12px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 8px; background: #141412; font-size: 14px; }
+.notice .muted { margin-top: 6px; }
