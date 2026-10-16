@@ -13,6 +13,20 @@ There is no build step and no linter for the static site; tests exist for the `s
 `tools/` scripts: `node --test server/test/*.test.js tools/*.test.js`. Don't invent other commands
 for them.
 
+## История изменений (обязательно)
+
+Каждый раз, когда ты меняешь сайт и это уходит на прод (пуш в `master`), добавь запись в начало списка
+`<ol class="cl-list">` в `changelog.html` (страница `/changelog.html`, ссылка в меню и в подвале главной). Шаблон —
+в HTML-комментарии над списком.
+- **Крупное изменение** (новая страница или функция, заметная переделка интерфейса): `<li class="cl-entry">` с датой,
+  заголовком `<h2>` и списком пунктов — что изменилось для посетителя, простыми словами, без внутренних деталей.
+- **Мелкое** (правка текста, исправление, стили, контент календаря): заглушка `<li class="cl-entry is-minor">` с датой
+  и текстом «Небольшие исправления и улучшения.». Одна заглушка на день; если за день уже есть крупная запись, мелкие
+  правки можно дописать пунктом в неё или пропустить.
+- Чисто внутренние правки (деплой, документация, тесты, `server/` без видимых изменений) не записываются.
+- Заодно обнови дату в `<p class="build-info">Обновлено: …</p>` в подвале `index.html`.
+- Не называй сайт фанатским в текстах записей: владелец сам участвует в разработке игры.
+
 ## Статус проекта (обновлено 2026-10-13)
 
 Этот раздел поддерживается вручную: после каждой заметной работы обновляй «Сделано» / «Не сделано».
@@ -138,8 +152,8 @@ for them.
 - `account.html`, `account.js`, `account.css` — user account page (served at `/account`: login, registration,
   e-mail verification, password reset/change, session list). `account-nav.js` — header "Войти"/login link
   (text link, `[data-account-label]` inside it, or an icon link — then only title/indicator change). `privacy.html` — privacy policy draft (served at `/privacy`).
-- Общая шапка с бургер-меню (`index.html`, `account.html`, `privacy.html`, `art-calc.html`, `map.html`, `clan.html`): разметка
-  `<header class="sh">` + `<nav class="sm" id="site-menu">` скопирована в каждый HTML (сборки нет — правь во всех шести),
+- Общая шапка с бургер-меню (`index.html`, `account.html`, `privacy.html`, `changelog.html`, `art-calc.html`, `map.html`, `clan.html`): разметка
+  `<header class="sh">` + `<nav class="sm" id="site-menu">` скопирована в каждый HTML (сборки нет — правь во всех семи),
   стили `site-header.css`, логика `site-menu.js`. На `/map` иконку аккаунта (`#auth-btn`) обновляет `map-app.js`, а не
   `account-nav.js`; полоса редактора карты — `.mbar` (только при редактировании на ПК). Версия `?v=` в `map.html` — меняй при правках.
 - `clan.html`, `clan.css`, `clan.js` (+ вкладки `clan-members.js`, `clan-roles.js`, `clan-invites.js`) — clan page
@@ -149,6 +163,9 @@ for them.
 - `map-tactics.js` (режим «Тактика» на `/map`: просмотр, опрос раз в 15 с, панель плана, фильтр по отрядам) и
   `map-tactics-editor.js` (карандаш и ластик, только ПК); сервер — `server/tactic-validate.js`, `tactic-repo.js`,
   `routes/tactics.js` (планы и рисунки, `ETag`/`304`), таблицы `tactic_plans`, `tactic_items` (миграция 7).
+- `changelog.html` — site change history (served as `/changelog.html`, no nginx route needed). Must be updated
+  with every user-visible change — see «История изменений (обязательно)» above. Menu item «История изменений» is in all
+  pages' shared menu.
 - `index.html` — landing page (hero with section chips/tiles, playtest calendar). Links to `styles.css`. The
   playtest calendar is hardcoded as a `PLAYTESTS` array inline in a `<script>` at the
   bottom of the file — add new playtests by editing that array directly, no CMS/data file.

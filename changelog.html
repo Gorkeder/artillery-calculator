@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>История изменений — ANOMA WIKI</title>
+<link rel="icon" href="/favicon.jpg" type="image/jpeg">
+<link rel="stylesheet" href="/account.css">
+<link rel="stylesheet" href="/site-header.css">
+<style>
+  main.cl { max-width: 760px; }
+  .cl-list { list-style: none; margin: 18px 0 0; padding: 0; }
+  .cl-entry { padding: 14px 0 14px 16px; border-left: 3px solid var(--accent); margin-bottom: 14px; }
+  .cl-entry.is-minor { border-left-color: var(--border); padding-top: 4px; padding-bottom: 4px; }
+  .cl-date { font-size: 13px; color: var(--muted); }
+  .cl-entry h2 { margin: 2px 0 6px; font-size: 17px; }
+  .cl-entry ul { margin: 0; padding-left: 20px; color: var(--text); font-size: 15px; }
+  .cl-entry li + li { margin-top: 3px; }
+  .cl-entry.is-minor p { margin: 0; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<header class="sh">
+  <a class="sh-brand" href="/"><img src="/logo.png" alt="ANOMA"><span>WIKI</span></a>
+  <a class="sh-icon" href="/account" data-account-link aria-label="Войти" title="Войти"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></a>
+  <button type="button" class="sh-icon" id="site-menu-toggle" aria-expanded="false"
+    aria-controls="site-menu" aria-label="Меню"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+</header>
+<div class="sm-overlay" id="site-menu-overlay" hidden></div>
+<nav class="sm" id="site-menu" aria-label="Меню сайта">
+  <div class="sm-head">
+    <span>Меню</span>
+    <button type="button" class="sh-icon" id="site-menu-close" aria-label="Закрыть меню"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="sm-body">
+    <ul class="sm-list">
+      <li><a class="sm-item" href="/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Главная</span></a></li>
+      <li><a class="sm-item" href="/map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg><span>Интерактивная карта</span></a></li>
+      <li><a class="sm-item" href="/art-calc"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h.01M12 19h.01M16 19h.01"/></svg><span>Калькулятор артиллерии</span></a></li>
+      <li><a class="sm-item" href="/#playtests"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>Календарь плейтестов</span></a></li>
+      <li><a class="sm-item" href="/clans"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M14 20a4.5 4.5 0 0 1 8 0"/></svg><span>Кланы</span></a></li>
+    </ul>
+    <div class="sm-sep"></div>
+    <ul class="sm-list">
+      <li><a class="sm-item" href="/account" data-account-link><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span data-account-label>Войти</span></a></li>
+      <li><a class="sm-item" href="https://anoma.su" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Официальный сайт</span><span class="sm-ext">&nearr;</span></a></li>
+      <li><a class="sm-item" href="/changelog.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>История изменений</span></a></li>
+      <li><a class="sm-item" href="/privacy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg><span>Политика данных</span></a></li>
+    </ul>
+  </div>
+  <div class="sm-foot">Фанатский проект, не официальный сайт ANOMA.<br>Автор — <a href="https://t.me/Gorkeder" target="_blank" rel="noopener">@Gorkeder</a></div>
+</nav>
+<main class="card cl">
+  <h1>История изменений</h1>
+  <p class="muted">Что нового на сайте. Сверху — самые свежие изменения.</p>
+
+  <!--
+    ПРАВИЛО ДЛЯ АГЕНТОВ И РАЗРАБОТЧИКОВ (см. CLAUDE.md → «История изменений»):
+    при каждом изменении сайта, которое выкатывается на прод, добавляй запись В НАЧАЛО списка.
+    Крупное изменение (новая страница, функция, заметная переделка интерфейса):
+      <li class="cl-entry">
+        <div class="cl-date">ДД.ММ.ГГГГ</div>
+        <h2>Короткий заголовок</h2>
+        <ul><li>что изменилось для посетителя, простыми словами</li></ul>
+      </li>
+    Мелкое (правки текста, исправления, стили, контент календаря) — заглушка:
+      <li class="cl-entry is-minor">
+        <div class="cl-date">ДД.ММ.ГГГГ</div>
+        <p>Небольшие исправления и улучшения.</p>
+      </li>
+    Если за этот день заглушка уже есть — новую не добавляй. Внутренние правки (деплой, документация, тесты)
+    не записываются. Заодно обнови дату «Обновлено» в подвале index.html.
+  -->
+  <ol class="cl-list">
+    <li class="cl-entry">
+      <div class="cl-date">16.10.2026</div>
+      <h2>История изменений и предупреждение в календаре</h2>
+      <ul>
+        <li>Появилась эта страница — история изменений сайта, ссылка есть в меню и внизу главной.</li>
+        <li>В календаре плейтестов — предупреждение, что даты ориентировочные и не являются официальным анонсом.</li>
+        <li>Карточка ближайшего плейтеста теперь одной ширины со списком.</li>
+        <li>На карте — подсказка, что её составляют игроки: предлагайте объекты и сообщайте об ошибках.</li>
+      </ul>
+    </li>
+    <li class="cl-entry is-minor">
+      <div class="cl-date">15.10.2026</div>
+      <p>Небольшие исправления и улучшения.</p>
+    </li>
+    <li class="cl-entry">
+      <div class="cl-date">13.10.2026</div>
+      <h2>Кланы и тактическая карта</h2>
+      <ul>
+        <li>Кланы: создание, каталог <a href="/clans">/clans</a>, страница клана с эмблемой, описанием и участниками.</li>
+        <li>Роли с правами и иерархией, отряды, вступление по ссылке-приглашению и по приглашению по логину.</li>
+        <li>На карте режим «Тактика»: планы клана, рисунки карандашом в цвете отряда, стрелки, зоны, метки и подписи, ластик.</li>
+        <li>Тактика обновляется у всех участников клана автоматически; на телефоне — просмотр.</li>
+        <li>В календаре — даты нового плейтеста.</li>
+      </ul>
+    </li>
+    <li class="cl-entry">
+      <div class="cl-date">12.10.2026</div>
+      <h2>Новый дизайн сайта</h2>
+      <ul>
+        <li>Новая шапка с выезжающим меню на всех страницах, единая тёмная палитра.</li>
+        <li>Главная: приветствие, разделы «Инструменты / Об игре / Сообщество» и карточки разделов.</li>
+        <li>Карта: плавающие панели поиска и фильтров, удобный интерфейс на телефоне.</li>
+      </ul>
+    </li>
+    <li class="cl-entry">
+      <div class="cl-date">11.10.2026</div>
+      <h2>Интерактивная карта, аккаунты и предложения</h2>
+      <ul>
+        <li><a href="/map">Интерактивная карта</a>: объекты по категориям, карточки с описанием и фото, поиск, фильтры, ссылки на объект.</li>
+        <li>Аккаунты: регистрация с подтверждением почты, вход по логину или почте, сброс пароля, список сессий.</li>
+        <li>Личные метки на карте — видны только вам.</li>
+        <li>Можно предложить новый объект на карту или сообщить об ошибке; предложения проходят модерацию.</li>
+      </ul>
+    </li>
+    <li class="cl-entry is-minor">
+      <div class="cl-date">29.09.2026</div>
+      <p>Небольшие исправления и улучшения.</p>
+    </li>
+    <li class="cl-entry is-minor">
+      <div class="cl-date">27.09.2026</div>
+      <p>Небольшие исправления и улучшения.</p>
+    </li>
+    <li class="cl-entry">
+      <div class="cl-date">21.09.2026</div>
+      <h2>Видео ютуберов</h2>
+      <ul>
+        <li>Боковая панель со свежими и популярными видео об ANOMA, официальный канал выделен.</li>
+      </ul>
+    </li>
+    <li class="cl-entry">
+      <div class="cl-date">10.09.2026</div>
+      <h2>Главная страница</h2>
+      <ul>
+        <li>Главная anoma-wiki.ru с календарём плейтестов и ссылкой на калькулятор.</li>
+      </ul>
+    </li>
+    <li class="cl-entry is-minor">
+      <div class="cl-date">07.09.2026</div>
+      <p>Небольшие исправления и улучшения.</p>
+    </li>
+    <li class="cl-entry">
+      <div class="cl-date">06.09.2026</div>
+      <h2>Запуск калькулятора артиллерии</h2>
+      <ul>
+        <li><a href="/art-calc">Калькулятор артиллерии</a> с картой: дальность и направление до цели, компас как в игре.</li>
+        <li>Ввод координат и ссылка, по которой можно поделиться расчётом.</li>
+      </ul>
+    </li>
+  </ol>
+</main>
+<script src="/site-menu.js"></script>
+<script src="/account-nav.js" defer></script>
+</body>
+</html>

@@ -258,3 +258,15 @@ body.tactics #mob-filters, body.tactics #mob-mod { display: none !important; }
 .tac-editor input[type=text] { margin-bottom: 2px; }
 .tac-tools button { flex: 1 1 auto; }
 .tac-panel select { margin-bottom: 6px; }
+
+/* crowd-sourced map notice */
+.crowd-note {
+  position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 1060;
+  display: flex; align-items: flex-start; gap: 10px; max-width: min(560px, calc(100vw - 20px));
+  padding: 8px 10px 8px 14px; font-size: 13px; line-height: 1.4;
+  background: rgba(18, 18, 16, .94); border: 1px solid var(--accent-dim); border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .5);
+}
+.crowd-note[hidden] { display: none; }
+.crowd-note b { color: var(--accent); }
+.crowd-note button { flex: none; font-size: 18px; line-height: 1; padding: 0 8px; }

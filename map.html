@@ -20,9 +20,9 @@
 <!-- /Yandex.Metrika counter -->
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="/vendor/geoman/leaflet-geoman.css">
-<script>window.MAP_V = "20261015a";</script>
-<link rel="stylesheet" href="/site-header.css?v=20261015a">
-<link rel="stylesheet" href="/map-app.css?v=20261015a">
+<script>window.MAP_V = "20261015b";</script>
+<link rel="stylesheet" href="/site-header.css?v=20261015b">
+<link rel="stylesheet" href="/map-app.css?v=20261015b">
 </head>
 <body>
 <header class="sh">
@@ -49,6 +49,7 @@
     <ul class="sm-list">
       <li><a class="sm-item" href="/account" data-account-link><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span data-account-label>Войти</span></a></li>
       <li><a class="sm-item" href="https://anoma.su" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Официальный сайт</span><span class="sm-ext">&nearr;</span></a></li>
+      <li><a class="sm-item" href="/changelog.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>История изменений</span></a></li>
       <li><a class="sm-item" href="/privacy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg><span>Политика данных</span></a></li>
     </ul>
   </div>
@@ -85,13 +86,28 @@
   <main id="map" class="map"></main>
   <div id="props-slot"></div>
 </div>
+<div id="crowd-note" class="crowd-note" hidden>
+  <span><b>Карту составляют игроки.</b> Она может быть неполной или неточной — нужен вклад каждого: предлагайте новые объекты и сообщайте об ошибках (для этого нужен <a href="/account">аккаунт</a>).</span>
+  <button type="button" id="crowd-note-x" aria-label="Закрыть">×</button>
+</div>
 <div id="sheet" class="sheet" hidden></div>
 <div id="notice" class="notice" hidden></div>
 <script src="/vendor/leaflet/leaflet.js"></script>
-<script src="/map-common.js?v=20261015a"></script>
-<script src="/map-icons.js?v=20261015a"></script>
-<script src="/map-geo.js?v=20261015a"></script>
-<script src="/map-app.js?v=20261015a"></script>
-<script src="/site-menu.js?v=20261015a"></script>
+<script src="/map-common.js?v=20261015b"></script>
+<script src="/map-icons.js?v=20261015b"></script>
+<script src="/map-geo.js?v=20261015b"></script>
+<script src="/map-app.js?v=20261015b"></script>
+<script>
+(function () {
+  var box = document.getElementById('crowd-note'), KEY = 'anoma-crowd-note-v1';
+  try { if (localStorage.getItem(KEY)) return; } catch (e) {}
+  box.hidden = false;
+  document.getElementById('crowd-note-x').addEventListener('click', function () {
+    box.hidden = true;
+    try { localStorage.setItem(KEY, '1'); } catch (e) {}
+  });
+})();
+</script>
+<script src="/site-menu.js?v=20261015b"></script>
 </body>
 </html>
