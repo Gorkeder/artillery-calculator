@@ -29,12 +29,12 @@ window.MAP_ICONS = {
 
   // anomalies and threats
   anomaly: { group: 'anomaly', label: 'Аномалия', svg: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>' },
-  radiation: { group: 'anomaly', label: 'Радиация', svg: '<circle cx="12" cy="12" r="10"/><path d="M12 12V3M12 12l7.8 4.5M12 12l-7.8 4.5"/>' },
+  radiation: { group: 'anomaly', label: 'Радиация', svg: '<path fill="currentColor" stroke="none" d="M10.3 9.06L7 3.34A10 10 0 0 1 17 3.34L13.7 9.06A3.4 3.4 0 0 0 10.3 9.06zM15.4 12H22A10 10 0 0 1 17 20.66L13.7 14.94A3.4 3.4 0 0 0 15.4 12zM10.3 14.94L7 20.66A10 10 0 0 1 2 12H8.6A3.4 3.4 0 0 0 10.3 14.94z"/><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/>' },
   psi: { group: 'anomaly', label: 'Пси-излучение', svg: '<circle cx="12" cy="12" r="10"/><path d="M7 7.5v2.5a5 5 0 0 0 10 0V7.5M12 6v12"/>' },
   temperature: { group: 'anomaly', label: 'Температура', svg: '<path d="M10 4a2 2 0 0 1 4 0v10.5a4 4 0 1 1-4 0z"/><path d="M12 9v6.5"/><circle cx="12" cy="17.5" r="1.2"/>' },
   fire: { group: 'anomaly', label: 'Огонь / жар', svg: '<path d="M12 22a7 7 0 0 0 7-7c0-4-3-6-4-10-2 2-3 4-3 6-1-1-2-2-2-4-2 2-5 5-5 8a7 7 0 0 0 7 7z"/>' },
   cold: { group: 'anomaly', label: 'Холод', svg: '<path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7"/><path d="M9.5 3.5L12 5l2.5-1.5M9.5 20.5L12 19l2.5 1.5"/>' },
-  bio: { group: 'anomaly', label: 'Биоугроза', svg: '<circle cx="12" cy="7.5" r="4"/><circle cx="7.8" cy="14.8" r="4"/><circle cx="16.2" cy="14.8" r="4"/><circle cx="12" cy="12.4" r="1.4"/>' },
+  bio: { group: 'anomaly', label: 'Биоугроза', svg: '<path stroke-width="1.6" d="M15.08 3.28A4.6 4.6 0 1 1 8.92 3.28M18.01 19.02A4.6 4.6 0 1 1 21.09 13.69M2.91 13.69A4.6 4.6 0 1 1 5.99 19.02"/><circle cx="12" cy="12" r="2.3" stroke-width="1.6"/>' },
   chemical: { group: 'anomaly', label: 'Химия', svg: '<path d="M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/>' },
   acid: { group: 'anomaly', label: 'Кислота', svg: '<path d="M8 3s4 4.5 4 7.5a4 4 0 0 1-8 0C4 7.5 8 3 8 3z"/><path d="M17 11s3 3.3 3 5.5a3 3 0 0 1-6 0c0-2.2 3-5.5 3-5.5z"/>' },
   gas: { group: 'anomaly', label: 'Газ', svg: '<path d="M7 18a4 4 0 0 1-.5-8A5.5 5.5 0 0 1 17 8.5a4.5 4.5 0 0 1 0 9.5z"/><path d="M9 21h6"/>' },
