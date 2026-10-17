@@ -4,7 +4,6 @@
   var api = window.MapApi;
   var h = window.h;
   var Geo = window.MapGeo;
-  var ICONS = window.MAP_ICONS || {};
 
   var V = null;
   var M = null;
@@ -229,9 +228,8 @@
     els.title = h('input', { type: 'text', maxLength: 80, placeholder: 'Название' });
     els.desc = h('textarea', { rows: 5, maxLength: 1000, placeholder: 'Описание' });
     els.color = h('input', { type: 'color' });
-    els.icon = h('select');
-    window.mapIconOptions().forEach(function (g) { els.icon.appendChild(g); });
-    els.iconRow = h('div', null, h('label', null, 'Иконка'), els.icon);
+    els.icon = window.mapIconPicker({ onchange: function (id) { patch({ icon: id }); } });
+    els.iconRow = h('div', null, h('label', null, 'Иконка'), els.icon.button, els.icon.grid);
     els.panel = h('aside', { class: 'ed-props', hidden: true },
       h('h2', null, 'Моя метка'),
       h('label', null, 'Название'), els.title,
@@ -244,7 +242,6 @@
     els.title.addEventListener('change', function () { patch({ title: els.title.value }); });
     els.desc.addEventListener('change', function () { patch({ description: els.desc.value }); });
     els.color.addEventListener('change', function () { patch({ color: els.color.value }); });
-    els.icon.addEventListener('change', function () { patch({ icon: els.icon.value }); });
   }
 
   function showProps(m) {
@@ -254,7 +251,8 @@
     put(els.title, m.title || '');
     put(els.desc, m.description || '');
     put(els.color, m.color);
-    put(els.icon, ICONS[m.icon] ? m.icon : 'question');
+    els.icon.set(m.icon);
+    els.icon.setColor(m.color);
     els.iconRow.hidden = m.shape !== 'point';
   }
 

@@ -134,6 +134,25 @@ body.editing #props-slot { display: block; }
 .dlg-list { max-height: 55vh; overflow: auto; min-width: min(640px, 80vw); }
 .dlg-row { display: flex; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .dlg-row input[type=text], .dlg-row select { width: auto; flex: 1; min-width: 0; }
+.dlg-row { flex-wrap: wrap; }
+
+/* icon picker (categories, personal marks) */
+.ip-btn { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 170px; }
+.ip-btn.open { border-color: var(--accent); }
+.ip-btn .ico { width: 20px; height: 20px; flex: none; }
+.ip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ip-grid {
+  flex-basis: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(36px, 1fr)); gap: 4px;
+  max-height: 260px; overflow: auto; margin-top: 6px; padding: 6px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+}
+.ip-grid[hidden] { display: none; }
+.ip-group { grid-column: 1 / -1; color: var(--muted); font-size: 11px; margin: 4px 0 0; }
+.ip-group:first-child { margin-top: 0; }
+.ip-tile { display: flex; align-items: center; justify-content: center; height: 36px; padding: 0; }
+.ip-tile .ico { width: 22px; height: 22px; }
+.ip-tile.sel { border-color: var(--accent); color: var(--accent); }
+.ed-props .ip-btn { max-width: 100%; }
 
 /* personal marks */
 .marks-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; cursor: pointer; }

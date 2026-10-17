@@ -39,8 +39,7 @@
 
     function row(c) {
       var n = featureCount(c.id);
-      var icon = h('select', { onchange: function () { patch(c, { icon: icon.value }); } },
-        window.mapIconOptions(c.icon));
+      var icon = window.mapIconPicker({ value: c.icon, color: c.color, onchange: function (id) { patch(c, { icon: id }); } });
       var shape = h('select', {
         disabled: n > 0,
         title: n > 0 ? 'Тип нельзя менять, пока в категории есть объекты' : '',
@@ -62,7 +61,7 @@
           });
         },
       }, 'Удалить');
-      return h('div', { class: 'dlg-row' }, color, name, icon, shape, vis, del);
+      return h('div', { class: 'dlg-row' }, color, name, icon.button, shape, vis, del, icon.grid);
     }
 
     function render() {

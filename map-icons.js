@@ -96,20 +96,82 @@ window.MAP_ICONS = {
   exit: { group: 'nature', label: 'Переход', svg: '<path d="M4 12h14M13 6l6 6-6 6"/>' },
 };
 
-// <optgroup>s with every icon, for the category and personal-mark icon selects.
-window.mapIconOptions = function (selected) {
+function iconSvg(id) {
+  var def = window.MAP_ICONS[id] || window.MAP_ICONS.question;
+  var span = document.createElement('span');
+  span.className = 'ico';
+  // def.svg is static markup from this file, never user input
+  span.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' + def.svg + '</svg>';
+  return span;
+}
+
+// Visual icon picker for the category and personal-mark editors: a button with the current
+// icon that toggles a grouped grid of all icons. Returns { button, grid, set(id), setColor(c) };
+// put both elements in the DOM (the grid is meant to sit below the button, full width).
+window.mapIconPicker = function (opts) {
   var icons = window.MAP_ICONS;
-  return window.MAP_ICON_GROUPS.map(function (g) {
-    var group = document.createElement('optgroup');
-    group.label = g[1];
+  var value = icons[opts.value] ? opts.value : 'question';
+  var tiles = {};
+
+  var button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'ip-btn';
+  button.title = 'Выбрать иконку';
+  var face = document.createElement('span');
+  var name = document.createElement('span');
+  name.className = 'ip-name';
+  button.appendChild(face);
+  button.appendChild(name);
+
+  var grid = document.createElement('div');
+  grid.className = 'ip-grid';
+  grid.hidden = true;
+  window.MAP_ICON_GROUPS.forEach(function (g) {
+    var head = document.createElement('div');
+    head.className = 'ip-group';
+    head.textContent = g[1];
+    grid.appendChild(head);
     Object.keys(icons).forEach(function (id) {
       if (icons[id].group !== g[0]) return;
-      var opt = document.createElement('option');
-      opt.value = id;
-      opt.textContent = icons[id].label;
-      if (id === selected) opt.selected = true;
-      group.appendChild(opt);
+      var tile = document.createElement('button');
+      tile.type = 'button';
+      tile.className = 'ip-tile';
+      tile.title = icons[id].label;
+      tile.appendChild(iconSvg(id));
+      tile.addEventListener('click', function () {
+        grid.hidden = true;
+        button.classList.remove('open');
+        if (id === value) return;
+        set(id);
+        if (opts.onchange) opts.onchange(id);
+      });
+      tiles[id] = tile;
+      grid.appendChild(tile);
     });
-    return group;
   });
+
+  button.addEventListener('click', function () {
+    grid.hidden = !grid.hidden;
+    button.classList.toggle('open', !grid.hidden);
+    if (grid.hidden) return;
+    // bring the current icon into view inside the grid only (scrollIntoView would also move the dialog)
+    var top = tiles[value].getBoundingClientRect().top - grid.getBoundingClientRect().top + grid.scrollTop;
+    grid.scrollTop = Math.max(0, top - 40);
+  });
+
+  function set(id) {
+    if (!icons[id]) id = 'question';
+    if (tiles[value]) tiles[value].classList.remove('sel');
+    value = id;
+    tiles[id].classList.add('sel');
+    face.textContent = '';
+    face.appendChild(iconSvg(id));
+    name.textContent = icons[id].label;
+  }
+  function setColor(color) { face.style.color = color || ''; }
+
+  set(value);
+  setColor(opts.color);
+  return { button: button, grid: grid, set: set, setColor: setColor };
 };
