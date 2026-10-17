@@ -3,7 +3,6 @@
 
   var api = window.MapApi;
   var h = window.h;
-  var ICONS = window.MAP_ICONS;
   var SHAPES = [['point', 'Точка'], ['polygon', 'Полигон'], ['line', 'Линия']];
 
   function V() { return window.MapViewer; }
@@ -41,7 +40,7 @@
     function row(c) {
       var n = featureCount(c.id);
       var icon = h('select', { onchange: function () { patch(c, { icon: icon.value }); } },
-        Object.keys(ICONS).map(function (id) { return h('option', { value: id, selected: id === c.icon }, ICONS[id].label); }));
+        window.mapIconOptions(c.icon));
       var shape = h('select', {
         disabled: n > 0,
         title: n > 0 ? 'Тип нельзя менять, пока в категории есть объекты' : '',

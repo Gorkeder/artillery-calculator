@@ -230,7 +230,7 @@
     els.desc = h('textarea', { rows: 5, maxLength: 1000, placeholder: 'Описание' });
     els.color = h('input', { type: 'color' });
     els.icon = h('select');
-    Object.keys(ICONS).forEach(function (id) { els.icon.appendChild(h('option', { value: id }, ICONS[id].label)); });
+    window.mapIconOptions().forEach(function (g) { els.icon.appendChild(g); });
     els.iconRow = h('div', null, h('label', null, 'Иконка'), els.icon);
     els.panel = h('aside', { class: 'ed-props', hidden: true },
       h('h2', null, 'Моя метка'),
